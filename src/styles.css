@@ -19,6 +19,11 @@
  */
 
 @theme inline {
+  --font-display: "Playfair Display", serif;
+  --font-mono: "Space Mono", ui-monospace, monospace;
+  --font-script: "Parisienne", cursive;
+  --font-deva: "Noto Sans Devanagari", sans-serif;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
