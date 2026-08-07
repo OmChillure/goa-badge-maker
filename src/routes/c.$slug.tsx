@@ -1,6 +1,7 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { toPng } from "html-to-image";
+import { getFontEmbedCss } from "@/lib/font-embed";
 import { Download, PenLine } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
 import { getCard } from "@/lib/cards.functions";
@@ -59,11 +60,13 @@ function SharedCard() {
   async function download() {
     if (!cardRef.current) return;
     await document.fonts.ready;
+    const fontEmbedCSS = await getFontEmbedCss();
     const dataUrl = await toPng(cardRef.current, {
       pixelRatio: 2,
       width: CARD_W,
       height: CARD_H,
       cacheBust: true,
+      fontEmbedCSS,
     });
     const a = document.createElement("a");
     a.href = dataUrl;

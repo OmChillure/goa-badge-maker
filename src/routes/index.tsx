@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toPng } from "html-to-image";
+import { getFontEmbedCss } from "@/lib/font-embed";
 import { toast } from "sonner";
 import { Download, Link2, Loader2, RefreshCw, Sparkles, Upload, X } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
@@ -156,12 +157,13 @@ function EditorPage() {
     setBusy("png");
     try {
       await document.fonts.ready;
+    const fontEmbedCSS = await getFontEmbedCss();
       const dataUrl = await toPng(cardRef.current, {
         pixelRatio: 2,
         width: CARD_W,
         height: CARD_H,
         cacheBust: true,
-        skipFonts: false,
+        fontEmbedCSS,
       });
       const a = document.createElement("a");
       a.href = dataUrl;
