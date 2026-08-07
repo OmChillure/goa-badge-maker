@@ -5,7 +5,7 @@ import beachVillage from "@/assets/beach-village.jpg";
 import palmShadow from "@/assets/palm-shadow.png";
 
 export const CARD_W = 1000;
-export const CARD_H = 1560;
+export const CARD_H = 1760;
 
 function useQr(value: string, color: string) {
   const [url, setUrl] = useState<string | null>(null);
