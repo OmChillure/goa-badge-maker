@@ -352,7 +352,54 @@ function EditorPage() {
             </TabsContent>
 
             <TabsContent value="style" className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Accent
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["pink", "blue"] as const).map((a) => (
+                      <button
+                        key={a}
+                        onClick={() => set("theme", buildTheme(detectBase(card.theme), a))}
+                        className={`flex items-center gap-2 rounded-lg border p-2 font-mono text-[10px] uppercase tracking-wider transition ${
+                          detectAccent(card.theme) === a ? "border-primary" : "border-border"
+                        }`}
+                      >
+                        <span
+                          className="size-4 rounded-full border border-border"
+                          style={{ background: ACCENTS[a] }}
+                        />
+                        {a === "pink" ? "Girl" : "Boy"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Card base
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["warm", "green"] as const).map((b) => (
+                      <button
+                        key={b}
+                        onClick={() => set("theme", buildTheme(b, detectAccent(card.theme)))}
+                        className={`flex items-center gap-2 rounded-lg border p-2 font-mono text-[10px] uppercase tracking-wider transition ${
+                          detectBase(card.theme) === b ? "border-primary" : "border-border"
+                        }`}
+                      >
+                        <span
+                          className="size-4 rounded-full border border-border"
+                          style={{ background: BASES[b].paper }}
+                        />
+                        {b === "warm" ? "Warm" : "Green"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-2">
+
                 {themePresets.map((p) => (
                   <button
                     key={p.name}
