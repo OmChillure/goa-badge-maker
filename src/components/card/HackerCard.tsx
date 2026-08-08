@@ -275,19 +275,8 @@ export const HackerCard = forwardRef<HTMLDivElement, Props>(function HackerCard(
                   <Barcode color={t.ink} />
                 </div>
               </div>
-              <div
-                style={{
-                  ...label,
-                  fontWeight: 700,
-                  fontSize: 22,
-                  color: t.ink,
-                  background: `${t.pink}33`,
-                  border: `1.5px solid ${t.pink}`,
-                  padding: "8px 20px",
-                }}
-              >
-                {data.applyLabel}
-              </div>
+              <svg viewBox="0 0 24 24" width={22} height={22}>
+
               <svg viewBox="0 0 24 24" width={22} height={22}>
                 <path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z" fill={t.pink} />
               </svg>
