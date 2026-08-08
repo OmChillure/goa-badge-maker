@@ -5,7 +5,18 @@ import { getFontEmbedCss } from "@/lib/font-embed";
 import { toast } from "sonner";
 import { Download, Link2, Loader2, RefreshCw, Sparkles, Upload, X } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
-import { defaultCard, mergeCard, themePresets, type CardData } from "@/lib/card-data";
+import {
+  ACCENTS,
+  BASES,
+  buildTheme,
+  defaultCard,
+  detectAccent,
+  detectBase,
+  mergeCard,
+  themePresets,
+  type CardData,
+} from "@/lib/card-data";
+
 import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/lib/image-utils";
 import { streamImage } from "@/lib/streamImage";
 import { saveCard } from "@/lib/cards.functions";
