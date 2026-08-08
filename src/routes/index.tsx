@@ -8,6 +8,7 @@ import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
 import {
   ACCENTS,
   ACCENT_LABELS,
+  BASES,
   BASE_LABELS,
   buildTheme,
   defaultCard,
