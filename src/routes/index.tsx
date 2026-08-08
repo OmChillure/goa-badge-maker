@@ -7,7 +7,8 @@ import { Download, Link2, Loader2, RefreshCw, Sparkles, Upload, X } from "lucide
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
 import {
   ACCENTS,
-  BASES,
+  ACCENT_LABELS,
+  BASE_LABELS,
   buildTheme,
   defaultCard,
   detectAccent,
