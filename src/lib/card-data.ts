@@ -34,46 +34,45 @@ export type CardData = {
 };
 
 export const defaultTheme: CardTheme = {
-  paper: "#f4efe2",
-  emerald: "#0d3b2e",
+  paper: "#f7f2e8",
+  emerald: "#123b2e",
   gold: "#c9a227",
   pink: "#e0466e",
-  ink: "#123024",
+  ink: "#173328",
 };
 
+export type CardBase = "warm" | "green";
+export type CardAccent = "pink" | "blue";
+
+export const ACCENTS: Record<CardAccent, string> = {
+  pink: "#e0466e",
+  blue: "#2f6fd0",
+};
+
+export const BASES: Record<CardBase, Omit<CardTheme, "pink">> = {
+  warm: { paper: "#f7f2e8", emerald: "#123b2e", gold: "#c9a227", ink: "#173328" },
+  green: { paper: "#0f3a2c", emerald: "#f2e8d4", gold: "#d8b455", ink: "#f2e8d4" },
+};
+
+export function buildTheme(base: CardBase, accent: CardAccent): CardTheme {
+  return { ...BASES[base], pink: ACCENTS[accent] };
+}
+
+export function detectBase(theme: CardTheme): CardBase {
+  return theme.paper.toLowerCase() === BASES.green.paper ? "green" : "warm";
+}
+
+export function detectAccent(theme: CardTheme): CardAccent {
+  return theme.pink.toLowerCase() === ACCENTS.blue ? "blue" : "pink";
+}
+
 export const themePresets: { name: string; theme: CardTheme }[] = [
-  { name: "Goa Emerald", theme: defaultTheme },
-  {
-    name: "Midnight Indigo",
-    theme: {
-      paper: "#f2f0ea",
-      emerald: "#16204a",
-      gold: "#c8a04a",
-      pink: "#e05a86",
-      ink: "#1a2242",
-    },
-  },
-  {
-    name: "Terracotta Sun",
-    theme: {
-      paper: "#f7efe3",
-      emerald: "#5c2317",
-      gold: "#d09a3c",
-      pink: "#d94f45",
-      ink: "#4a2117",
-    },
-  },
-  {
-    name: "Ink & Rose",
-    theme: {
-      paper: "#f5f2ee",
-      emerald: "#1d1d1f",
-      gold: "#b99457",
-      pink: "#d6456a",
-      ink: "#26262a",
-    },
-  },
+  { name: "Warm Ivory · Pink", theme: buildTheme("warm", "pink") },
+  { name: "Warm Ivory · Blue", theme: buildTheme("warm", "blue") },
+  { name: "Dark Green · Pink", theme: buildTheme("green", "pink") },
+  { name: "Dark Green · Blue", theme: buildTheme("green", "blue") },
 ];
+
 
 export const defaultCard: CardData = {
   titleLine1: "HACKER",

@@ -5,7 +5,18 @@ import { getFontEmbedCss } from "@/lib/font-embed";
 import { toast } from "sonner";
 import { Download, Link2, Loader2, RefreshCw, Sparkles, Upload, X } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
-import { defaultCard, mergeCard, themePresets, type CardData } from "@/lib/card-data";
+import {
+  ACCENTS,
+  BASES,
+  buildTheme,
+  defaultCard,
+  detectAccent,
+  detectBase,
+  mergeCard,
+  themePresets,
+  type CardData,
+} from "@/lib/card-data";
+
 import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/lib/image-utils";
 import { streamImage } from "@/lib/streamImage";
 import { saveCard } from "@/lib/cards.functions";
@@ -340,10 +351,8 @@ function EditorPage() {
               </div>
               <Field label="Location" value={card.location} onChange={(v) => set("location", v)} />
               <Field label="Dates" value={card.dates} onChange={(v) => set("dates", v)} />
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Hype label" value={card.hypeLabel} onChange={(v) => set("hypeLabel", v)} />
-                <Field label="Apply label" value={card.applyLabel} onChange={(v) => set("applyLabel", v)} />
-              </div>
+              <Field label="Hype label" value={card.hypeLabel} onChange={(v) => set("hypeLabel", v)} />
+
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Stamp top" value={card.stampTop} onChange={(v) => set("stampTop", v)} />
                 <Field label="Stamp bottom" value={card.stampBottom} onChange={(v) => set("stampBottom", v)} />
@@ -354,7 +363,54 @@ function EditorPage() {
             </TabsContent>
 
             <TabsContent value="style" className="space-y-4 pt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Accent
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["pink", "blue"] as const).map((a) => (
+                      <button
+                        key={a}
+                        onClick={() => set("theme", buildTheme(detectBase(card.theme), a))}
+                        className={`flex items-center gap-2 rounded-lg border p-2 font-mono text-[10px] uppercase tracking-wider transition ${
+                          detectAccent(card.theme) === a ? "border-primary" : "border-border"
+                        }`}
+                      >
+                        <span
+                          className="size-4 rounded-full border border-border"
+                          style={{ background: ACCENTS[a] }}
+                        />
+                        {a === "pink" ? "Girl" : "Boy"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                    Card base
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {(["warm", "green"] as const).map((b) => (
+                      <button
+                        key={b}
+                        onClick={() => set("theme", buildTheme(b, detectAccent(card.theme)))}
+                        className={`flex items-center gap-2 rounded-lg border p-2 font-mono text-[10px] uppercase tracking-wider transition ${
+                          detectBase(card.theme) === b ? "border-primary" : "border-border"
+                        }`}
+                      >
+                        <span
+                          className="size-4 rounded-full border border-border"
+                          style={{ background: BASES[b].paper }}
+                        />
+                        {b === "warm" ? "Warm" : "Green"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-2">
+
                 {themePresets.map((p) => (
                   <button
                     key={p.name}
