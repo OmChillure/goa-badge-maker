@@ -340,10 +340,8 @@ function EditorPage() {
               </div>
               <Field label="Location" value={card.location} onChange={(v) => set("location", v)} />
               <Field label="Dates" value={card.dates} onChange={(v) => set("dates", v)} />
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Hype label" value={card.hypeLabel} onChange={(v) => set("hypeLabel", v)} />
-                <Field label="Apply label" value={card.applyLabel} onChange={(v) => set("applyLabel", v)} />
-              </div>
+              <Field label="Hype label" value={card.hypeLabel} onChange={(v) => set("hypeLabel", v)} />
+
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Stamp top" value={card.stampTop} onChange={(v) => set("stampTop", v)} />
                 <Field label="Stamp bottom" value={card.stampBottom} onChange={(v) => set("stampBottom", v)} />
