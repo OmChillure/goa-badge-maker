@@ -277,7 +277,6 @@ export const HackerCard = forwardRef<HTMLDivElement, Props>(function HackerCard(
               </div>
               <svg viewBox="0 0 24 24" width={22} height={22}>
 
-              <svg viewBox="0 0 24 24" width={22} height={22}>
                 <path d="M12 2l2 8 8 2-8 2-2 8-2-8-8-2 8-2z" fill={t.pink} />
               </svg>
             </div>
