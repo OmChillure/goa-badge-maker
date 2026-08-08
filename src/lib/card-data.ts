@@ -41,17 +41,43 @@ export const defaultTheme: CardTheme = {
   ink: "#173328",
 };
 
-export type CardBase = "warm" | "green";
-export type CardAccent = "pink" | "blue";
+export type CardBase = "warm" | "green" | "midnight" | "clay" | "noir" | "ocean";
+export type CardAccent = "pink" | "blue" | "amber" | "teal" | "violet" | "coral";
 
 export const ACCENTS: Record<CardAccent, string> = {
   pink: "#e0466e",
   blue: "#2f6fd0",
+  amber: "#e08a1e",
+  teal: "#12a594",
+  violet: "#7c5cd6",
+  coral: "#f2603c",
+};
+
+export const ACCENT_LABELS: Record<CardAccent, string> = {
+  pink: "Pink",
+  blue: "Blue",
+  amber: "Amber",
+  teal: "Teal",
+  violet: "Violet",
+  coral: "Coral",
 };
 
 export const BASES: Record<CardBase, Omit<CardTheme, "pink">> = {
   warm: { paper: "#f7f2e8", emerald: "#123b2e", gold: "#c9a227", ink: "#173328" },
   green: { paper: "#0f3a2c", emerald: "#f2e8d4", gold: "#d8b455", ink: "#f2e8d4" },
+  midnight: { paper: "#0d1330", emerald: "#e6ecff", gold: "#9fb4ff", ink: "#e6ecff" },
+  clay: { paper: "#f4e6dc", emerald: "#6b3a2a", gold: "#b3702f", ink: "#4a2a20" },
+  noir: { paper: "#111111", emerald: "#f0e6cf", gold: "#c9a84c", ink: "#f0e6cf" },
+  ocean: { paper: "#eaf3f7", emerald: "#0c2340", gold: "#2d8a9e", ink: "#0c2340" },
+};
+
+export const BASE_LABELS: Record<CardBase, string> = {
+  warm: "Warm ivory",
+  green: "Dark green",
+  midnight: "Midnight",
+  clay: "Terracotta",
+  noir: "Noir gold",
+  ocean: "Ocean",
 };
 
 export function buildTheme(base: CardBase, accent: CardAccent): CardTheme {
@@ -59,11 +85,15 @@ export function buildTheme(base: CardBase, accent: CardAccent): CardTheme {
 }
 
 export function detectBase(theme: CardTheme): CardBase {
-  return theme.paper.toLowerCase() === BASES.green.paper ? "green" : "warm";
+  const paper = theme.paper.toLowerCase();
+  const found = (Object.keys(BASES) as CardBase[]).find((b) => BASES[b].paper === paper);
+  return found ?? "warm";
 }
 
 export function detectAccent(theme: CardTheme): CardAccent {
-  return theme.pink.toLowerCase() === ACCENTS.blue ? "blue" : "pink";
+  const pink = theme.pink.toLowerCase();
+  const found = (Object.keys(ACCENTS) as CardAccent[]).find((a) => ACCENTS[a] === pink);
+  return found ?? "pink";
 }
 
 export const themePresets: { name: string; theme: CardTheme }[] = [
@@ -71,6 +101,14 @@ export const themePresets: { name: string; theme: CardTheme }[] = [
   { name: "Warm Ivory · Blue", theme: buildTheme("warm", "blue") },
   { name: "Dark Green · Pink", theme: buildTheme("green", "pink") },
   { name: "Dark Green · Blue", theme: buildTheme("green", "blue") },
+  { name: "Midnight · Violet", theme: buildTheme("midnight", "violet") },
+  { name: "Midnight · Teal", theme: buildTheme("midnight", "teal") },
+  { name: "Terracotta · Amber", theme: buildTheme("clay", "amber") },
+  { name: "Terracotta · Coral", theme: buildTheme("clay", "coral") },
+  { name: "Noir Gold · Amber", theme: buildTheme("noir", "amber") },
+  { name: "Noir Gold · Pink", theme: buildTheme("noir", "pink") },
+  { name: "Ocean · Teal", theme: buildTheme("ocean", "teal") },
+  { name: "Ocean · Coral", theme: buildTheme("ocean", "coral") },
 ];
 
 
