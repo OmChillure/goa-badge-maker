@@ -11,7 +11,7 @@ function useQr(value: string, color: string) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    QRCode.toDataURL(value || "https://lovable.dev", {
+    QRCode.toDataURL(value || "https://hackerhouse.goa", {
       margin: 0,
       width: 320,
       errorCorrectionLevel: "H",

@@ -11,7 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiGeneratePortraitRouteImport } from './routes/api/generate-portrait'
-import { Route as CSlugRouteImport } from './routes/c.$slug'
+import { Route as ApiUploadCardRouteImport } from './routes/api/upload-card'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -23,40 +23,40 @@ const ApiGeneratePortraitRoute = ApiGeneratePortraitRouteImport.update({
   path: '/api/generate-portrait',
   getParentRoute: () => rootRouteImport,
 } as any)
-const CSlugRoute = CSlugRouteImport.update({
-  id: '/c/$slug',
-  path: '/c/$slug',
+const ApiUploadCardRoute = ApiUploadCardRouteImport.update({
+  id: '/api/upload-card',
+  path: '/api/upload-card',
   getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/generate-portrait': typeof ApiGeneratePortraitRoute
-  '/c/$slug': typeof CSlugRoute
+  '/api/upload-card': typeof ApiUploadCardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/generate-portrait': typeof ApiGeneratePortraitRoute
-  '/c/$slug': typeof CSlugRoute
+  '/api/upload-card': typeof ApiUploadCardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/generate-portrait': typeof ApiGeneratePortraitRoute
-  '/c/$slug': typeof CSlugRoute
+  '/api/upload-card': typeof ApiUploadCardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/generate-portrait' | '/c/$slug'
+  fullPaths: '/' | '/api/generate-portrait' | '/api/upload-card'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/generate-portrait' | '/c/$slug'
-  id: '__root__' | '/' | '/api/generate-portrait' | '/c/$slug'
+  to: '/' | '/api/generate-portrait' | '/api/upload-card'
+  id: '__root__' | '/' | '/api/generate-portrait' | '/api/upload-card'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiGeneratePortraitRoute: typeof ApiGeneratePortraitRoute
-  CSlugRoute: typeof CSlugRoute
+  ApiUploadCardRoute: typeof ApiUploadCardRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -75,11 +75,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGeneratePortraitRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/c/$slug': {
-      id: '/c/$slug'
-      path: '/c/$slug'
-      fullPath: '/c/$slug'
-      preLoaderRoute: typeof CSlugRouteImport
+    '/api/upload-card': {
+      id: '/api/upload-card'
+      path: '/api/upload-card'
+      fullPath: '/api/upload-card'
+      preLoaderRoute: typeof ApiUploadCardRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -88,8 +88,18 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiGeneratePortraitRoute: ApiGeneratePortraitRoute,
-  CSlugRoute: CSlugRoute,
+  ApiUploadCardRoute: ApiUploadCardRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

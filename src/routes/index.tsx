@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { toPng } from "html-to-image";
 import { getFontEmbedCss } from "@/lib/font-embed";
 import { toast } from "sonner";
-import { Download, Link2, Loader2, RefreshCw, Sparkles, Upload, X } from "lucide-react";
+import { Copy, Download, Loader2, RefreshCw, Share2, Sparkles, Upload, X } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
 import {
   ACCENTS,
@@ -21,12 +21,18 @@ import {
 
 import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/lib/image-utils";
 import { streamImage } from "@/lib/streamImage";
-import { saveCard } from "@/lib/cards.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -35,13 +41,13 @@ export const Route = createFileRoute("/")({
       {
         name: "description",
         content:
-          "Design a luxury tropical Hacker House Goa event badge with your name, role and stack. Upload or generate a portrait, download a high-res PNG, and share a live link.",
+          "Design a luxury tropical Hacker House Goa event badge with your name, role and stack. Upload or generate a portrait and download a high-res PNG.",
       },
       { property: "og:title", content: "Hacker House Goa — Build Your Event ID Card" },
       {
         property: "og:description",
         content:
-          "Design a luxury tropical Hacker House Goa event badge, download it in high resolution and share it with one link.",
+          "Design a luxury tropical Hacker House Goa event badge and download it in high resolution.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -65,7 +71,9 @@ function Field({
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">{label}</Label>
+      <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </Label>
       <Input
         value={value}
         placeholder={placeholder}
@@ -78,10 +86,10 @@ function Field({
 
 function EditorPage() {
   const [card, setCard] = useState<CardData>(defaultCard);
-  const [slug, setSlug] = useState<string | null>(null);
-  const [editToken, setEditToken] = useState<string | null>(null);
   const [busy, setBusy] = useState<null | "png" | "share" | "ai">(null);
-  const [aiPrompt, setAiPrompt] = useState("A confident Indian woman founder with long dark hair and sunglasses");
+  const [aiPrompt, setAiPrompt] = useState(
+    "A confident Indian woman founder with long dark hair and sunglasses",
+  );
   const [aiPreview, setAiPreview] = useState<{ url: string; final: boolean } | null>(null);
   const [scale, setScale] = useState(0.5);
 
@@ -92,10 +100,8 @@ function EditorPage() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as { card?: unknown; slug?: string; editToken?: string };
+        const parsed = JSON.parse(raw) as { card?: unknown };
         if (parsed.card) setCard(mergeCard(parsed.card));
-        if (parsed.slug) setSlug(parsed.slug);
-        if (parsed.editToken) setEditToken(parsed.editToken);
       }
     } catch {
       /* ignore */
@@ -104,11 +110,11 @@ function EditorPage() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ card, slug, editToken }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ card }));
     } catch {
       /* quota — ignore */
     }
-  }, [card, slug, editToken]);
+  }, [card]);
 
   useEffect(() => {
     const el = stageRef.current;
@@ -124,13 +130,18 @@ function EditorPage() {
     return () => ro.disconnect();
   }, []);
 
-  const shareUrl = useMemo(() => {
-    if (typeof window === "undefined") return "https://hackerhouse.goa";
-    return slug ? `${window.location.origin}/c/${slug}` : window.location.origin;
-  }, [slug]);
+  const [shareUrl, setShareUrl] = useState("https://hhgoa.com/");
+  useEffect(() => setShareUrl(window.location.origin), []);
 
-  const set = <K extends keyof CardData>(key: K, value: CardData[K]) =>
+  // The uploaded CDN link for the current card, once it has been shared.
+  const [shareLink, setShareLink] = useState<string | null>(null);
+
+  // A share link is a snapshot of the PNG at upload time, so any edit makes the
+  // existing one stale — drop it and let the user re-share.
+  const set = <K extends keyof CardData>(key: K, value: CardData[K]) => {
+    setShareLink(null);
     setCard((c) => ({ ...c, [key]: value }));
+  };
 
   async function handleUpload(file: File) {
     try {
@@ -165,22 +176,72 @@ function EditorPage() {
     }
   }
 
+  const fileName = () =>
+    `${card.name.replace(/\s+/g, "-").toLowerCase() || "hacker-house"}-id-card.png`;
+
+  // The badge body starts at y=150; above it sits only the lanyard and its
+  // 300px clip, so the full-width canvas leaves a wide empty band either side
+  // of the strap. Re-draw onto a canvas that keeps full width from the body
+  // down but only strap width above it, so the export hugs the artwork.
+  async function cropToStrap(dataUrl: string, backgroundColor?: string) {
+    const img = new Image();
+    img.src = dataUrl;
+    await img.decode();
+
+    const s = img.width / CARD_W; // device pixel ratio baked in by toPng
+    const bodyTop = 150 * s;
+    const strapW = 300 * s;
+    const strapX = (img.width - strapW) / 2;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+
+    if (backgroundColor) {
+      // Paint only where artwork actually is, leaving the flanks transparent.
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(strapX, 0, strapW, bodyTop);
+      ctx.fillRect(0, bodyTop, img.width, img.height - bodyTop);
+    }
+
+    ctx.drawImage(img, strapX, 0, strapW, bodyTop, strapX, 0, strapW, bodyTop);
+    ctx.drawImage(
+      img,
+      0,
+      bodyTop,
+      img.width,
+      img.height - bodyTop,
+      0,
+      bodyTop,
+      img.width,
+      img.height - bodyTop,
+    );
+
+    return canvas.toDataURL("image/png");
+  }
+
+  async function renderPng(backgroundColor?: string) {
+    if (!cardRef.current) throw new Error("Card not ready");
+    await document.fonts.ready;
+    const fontEmbedCSS = await getFontEmbedCss();
+    const raw = await toPng(cardRef.current, {
+      pixelRatio: 2,
+      width: CARD_W,
+      height: CARD_H,
+      cacheBust: true,
+      fontEmbedCSS,
+    });
+    return cropToStrap(raw, backgroundColor);
+  }
+
   async function handleDownload() {
-    if (!cardRef.current) return;
     setBusy("png");
     try {
-      await document.fonts.ready;
-    const fontEmbedCSS = await getFontEmbedCss();
-      const dataUrl = await toPng(cardRef.current, {
-        pixelRatio: 2,
-        width: CARD_W,
-        height: CARD_H,
-        cacheBust: true,
-        fontEmbedCSS,
-      });
       const a = document.createElement("a");
-      a.href = dataUrl;
-      a.download = `${card.name.replace(/\s+/g, "-").toLowerCase() || "hacker-house"}-id-card.png`;
+      a.href = await renderPng();
+      a.download = fileName();
       a.click();
       toast.success("Card downloaded");
     } catch {
@@ -190,24 +251,26 @@ function EditorPage() {
     }
   }
 
+  // There is no database: the badge is flattened to a PNG, uploaded, and the
+  // resulting CDN URL *is* the share link. Editing and re-sharing mints a new
+  // URL rather than updating the old one.
   async function handleShare() {
     setBusy("share");
     try {
-      const res = await saveCard({ data: { card, slug, editToken } });
-      setSlug(res.slug);
-      setEditToken(res.editToken);
-      const url = `${window.location.origin}/c/${res.slug}`;
-      if (navigator.share) {
-        try {
-          await navigator.share({ title: `${card.name} — Hacker House Goa`, url });
-        } catch {
-          /* cancelled */
-        }
-      }
+      const blob = await (await fetch(await renderPng(card.theme.paper))).blob();
+
+      const form = new FormData();
+      form.append("file", new File([blob], fileName(), { type: "image/png" }));
+      form.append("name", card.name);
+
+      const res = await fetch("/api/upload-card", { method: "POST", body: form });
+      if (!res.ok) throw new Error((await res.text()) || "Upload failed");
+      const { url } = (await res.json()) as { url: string };
+
+      setShareLink(url);
       await navigator.clipboard?.writeText(url).catch(() => {});
-      toast.success("Share link copied", { description: url });
-    } catch {
-      toast.error("Could not create share link");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not share the card");
     } finally {
       setBusy(null);
     }
@@ -226,20 +289,75 @@ function EditorPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setCard(defaultCard)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShareLink(null);
+                setCard(defaultCard);
+              }}
+            >
               <RefreshCw className="size-4" /> Reset
             </Button>
             <Button variant="secondary" disabled={busy === "share"} onClick={handleShare}>
-              {busy === "share" ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" />}
-              Share link
+              {busy === "share" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Share2 className="size-4" />
+              )}
+              Get share link
             </Button>
             <Button disabled={busy === "png"} onClick={handleDownload}>
-              {busy === "png" ? <Loader2 className="size-4 animate-spin" /> : <Download className="size-4" />}
+              {busy === "png" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Download className="size-4" />
+              )}
               Download PNG
             </Button>
           </div>
         </div>
+
       </header>
+
+      <Dialog open={!!shareLink} onOpenChange={(o) => !o && setShareLink(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Your card is live</DialogTitle>
+            <DialogDescription>
+              The link is already copied to your clipboard. Anyone with it can view your
+              card.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center gap-2">
+            <Input readOnly value={shareLink ?? ""} onFocus={(e) => e.currentTarget.select()} />
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (!shareLink) return;
+                void navigator.clipboard?.writeText(shareLink);
+                toast.success("Link copied");
+              }}
+            >
+              <Copy className="size-4" /> Copy
+            </Button>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            This link points at a snapshot of the card. Edit it and share again to get a
+            new link — the old one keeps the old design.
+          </p>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" asChild>
+              <a href={shareLink ?? "#"} target="_blank" rel="noreferrer">
+                Open
+              </a>
+            </Button>
+            <Button onClick={() => setShareLink(null)}>Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <main className="mx-auto grid max-w-[1500px] gap-6 p-5 lg:grid-cols-[420px_1fr]">
         {/* editor */}
@@ -279,7 +397,12 @@ function EditorPage() {
                   {card.stack.map((s, i) => (
                     <button
                       key={`${s}-${i}`}
-                      onClick={() => set("stack", card.stack.filter((_, j) => j !== i))}
+                      onClick={() =>
+                        set(
+                          "stack",
+                          card.stack.filter((_, j) => j !== i),
+                        )
+                      }
                       className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider hover:border-destructive hover:text-destructive"
                     >
                       {s} <X className="size-3" />
@@ -342,10 +465,22 @@ function EditorPage() {
 
             <TabsContent value="event" className="space-y-4 pt-4">
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Title line 1" value={card.titleLine1} onChange={(v) => set("titleLine1", v)} />
-                <Field label="Title line 2" value={card.titleLine2} onChange={(v) => set("titleLine2", v)} />
+                <Field
+                  label="Title line 1"
+                  value={card.titleLine1}
+                  onChange={(v) => set("titleLine1", v)}
+                />
+                <Field
+                  label="Title line 2"
+                  value={card.titleLine2}
+                  onChange={(v) => set("titleLine2", v)}
+                />
               </div>
-              <Field label="Sticker text" value={card.stickerText} onChange={(v) => set("stickerText", v)} />
+              <Field
+                label="Sticker text"
+                value={card.stickerText}
+                onChange={(v) => set("stickerText", v)}
+              />
               <Field label="Tagline" value={card.tagline} onChange={(v) => set("tagline", v)} />
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Time" value={card.time} onChange={(v) => set("time", v)} />
@@ -353,14 +488,34 @@ function EditorPage() {
               </div>
               <Field label="Location" value={card.location} onChange={(v) => set("location", v)} />
               <Field label="Dates" value={card.dates} onChange={(v) => set("dates", v)} />
-              <Field label="Hype label" value={card.hypeLabel} onChange={(v) => set("hypeLabel", v)} />
+              <Field
+                label="Hype label"
+                value={card.hypeLabel}
+                onChange={(v) => set("hypeLabel", v)}
+              />
 
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Stamp top" value={card.stampTop} onChange={(v) => set("stampTop", v)} />
-                <Field label="Stamp bottom" value={card.stampBottom} onChange={(v) => set("stampBottom", v)} />
+                <Field
+                  label="Stamp top"
+                  value={card.stampTop}
+                  onChange={(v) => set("stampTop", v)}
+                />
+                <Field
+                  label="Stamp bottom"
+                  value={card.stampBottom}
+                  onChange={(v) => set("stampBottom", v)}
+                />
               </div>
-              <Field label="Footer line 1" value={card.footerLine1} onChange={(v) => set("footerLine1", v)} />
-              <Field label="Footer line 2" value={card.footerLine2} onChange={(v) => set("footerLine2", v)} />
+              <Field
+                label="Footer line 1"
+                value={card.footerLine1}
+                onChange={(v) => set("footerLine1", v)}
+              />
+              <Field
+                label="Footer line 2"
+                value={card.footerLine2}
+                onChange={(v) => set("footerLine2", v)}
+              />
               <Field label="Hashtag" value={card.hashtag} onChange={(v) => set("hashtag", v)} />
             </TabsContent>
 
@@ -410,8 +565,6 @@ function EditorPage() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-2">
-
-
                 {themePresets.map((p) => (
                   <button
                     key={p.name}
@@ -427,7 +580,9 @@ function EditorPage() {
                         />
                       ))}
                     </div>
-                    <div className="mt-2 font-mono text-[10px] uppercase tracking-wider">{p.name}</div>
+                    <div className="mt-2 font-mono text-[10px] uppercase tracking-wider">
+                      {p.name}
+                    </div>
                   </button>
                 ))}
               </div>
