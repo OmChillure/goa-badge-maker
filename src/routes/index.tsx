@@ -63,26 +63,32 @@ function Field({
   value,
   onChange,
   placeholder,
+  locked,
 }: {
   label: string;
   value: string;
-  onChange: (v: string) => void;
+  onChange?: (v: string) => void;
   placeholder?: string;
+  locked?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+      <Label className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
         {label}
+        {locked ? <Lock className="size-3" /> : null}
       </Label>
       <Input
         value={value}
         placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-card"
+        readOnly={locked}
+        tabIndex={locked ? -1 : undefined}
+        onChange={(e) => onChange?.(e.target.value)}
+        className={locked ? "bg-muted/60 text-muted-foreground cursor-not-allowed" : "bg-card"}
       />
     </div>
   );
 }
+
 
 function EditorPage() {
   const [card, setCard] = useState<CardData>(defaultCard);
