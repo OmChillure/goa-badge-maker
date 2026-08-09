@@ -20,7 +20,7 @@ import {
   themePresets,
   type CardData,
 } from "@/lib/card-data";
-import { encodeShare, SHARE_HASHTAG, shareCaption } from "@/lib/share-link";
+import { encodeShare, shareCaption, tweetIntentUrl } from "@/lib/share-link";
 
 import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/lib/image-utils";
 import { streamImage } from "@/lib/streamImage";
@@ -87,9 +87,18 @@ function Field({
   );
 }
 
+/** X's current logo — lucide still ships the retired bird. */
+function XLogo({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden className={className}>
+      <path d="M18.9 2.3h3.3l-7.2 8.2 8.5 11.2h-6.7l-5.2-6.8-6 6.8H2.3l7.7-8.8L1.9 2.3h6.8l4.7 6.2zm-1.2 17.5h1.8L7.4 4.1H5.4z" />
+    </svg>
+  );
+}
+
 function EditorPage() {
   const [card, setCard] = useState<CardData>(defaultCard);
-  const [busy, setBusy] = useState<null | "png" | "share" | "ai">(null);
+  const [busy, setBusy] = useState<null | "png" | "share" | "ai" | "x">(null);
   const [aiPrompt, setAiPrompt] = useState(
     "A confident Indian woman founder with long dark hair and sunglasses",
   );
@@ -306,13 +315,30 @@ function EditorPage() {
   }
 
   // There is no database: the badge is flattened to a PNG, uploaded, and the
-  // resulting CDN URL *is* the share link. Editing and re-sharing mints a new
-  // URL rather than updating the old one.
+  // resulting CDN URL is wrapped in a /c/ link. Editing and re-sharing mints a
+  // new URL rather than updating the old one.
+  async function uploadForLink(): Promise<string> {
+    // Flatten onto the paper colour: a transparent PNG renders on a black
+    // backdrop in most chat apps.
+    const blob = await renderBlob(card.theme.paper);
+    const form = new FormData();
+    form.append("file", new File([blob], fileName(), { type: "image/png" }));
+    form.append("name", card.name);
+
+    const res = await fetch("/api/upload-card", { method: "POST", body: form });
+    if (!res.ok) throw new Error((await res.text()) || "Upload failed");
+    const { url } = (await res.json()) as { url: string };
+
+    // Link to the /c/ page rather than the raw PNG — it is the only one of the
+    // two that carries og:image, so the preview shows the badge.
+    const link = `${window.location.origin}/c/${encodeShare({ url, name: card.name })}`;
+    setShareLink(link);
+    return link;
+  }
+
   async function handleShare() {
     setBusy("share");
     try {
-      // Flatten onto the paper colour: a transparent PNG renders on a black
-      // backdrop in most chat apps.
       const blob = await renderBlob(card.theme.paper);
       const file = new File([blob], fileName(), { type: "image/png" });
       const caption = shareCaption(card.name);
@@ -329,18 +355,7 @@ function EditorPage() {
         }
       }
 
-      const form = new FormData();
-      form.append("file", file);
-      form.append("name", card.name);
-
-      const res = await fetch("/api/upload-card", { method: "POST", body: form });
-      if (!res.ok) throw new Error((await res.text()) || "Upload failed");
-      const { url } = (await res.json()) as { url: string };
-
-      // Share the /c/ page rather than the raw PNG — it is the only one of the
-      // two that carries og:image, so the preview shows the badge.
-      const link = `${window.location.origin}/c/${encodeShare({ url, name: card.name })}`;
-      setShareLink(link);
+      const link = await uploadForLink();
 
       if (navigator.share) {
         try {
@@ -353,6 +368,30 @@ function EditorPage() {
       await navigator.clipboard?.writeText(`${caption} ${link}`).catch(() => {});
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not share the card");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // X cannot take an image attachment through the web intent, so the tweet
+  // picture comes from the /c/ page's og:image. That means we must upload
+  // first — but the popup has to be opened synchronously inside the click or
+  // the blocker eats it, so open it now and point it at the URL once we have it.
+  async function handleShareToX() {
+    const popup = window.open("", "_blank", "noopener,noreferrer,width=600,height=700");
+    setBusy("x");
+    try {
+      const link = shareLink ?? (await uploadForLink());
+      const intent = tweetIntentUrl(shareCaption(card.name), link);
+      if (popup && !popup.closed) {
+        popup.location.replace(intent);
+      } else {
+        // Blocked anyway — a normal navigation still gets them there.
+        window.open(intent, "_blank", "noopener,noreferrer");
+      }
+    } catch (e) {
+      popup?.close();
+      toast.error(e instanceof Error ? e.message : "Could not open X");
     } finally {
       setBusy(null);
     }
@@ -382,6 +421,14 @@ function EditorPage() {
               }}
             >
               <RefreshCw className="size-4" /> Reset
+            </Button>
+            <Button variant="outline" disabled={busy === "x"} onClick={handleShareToX}>
+              {busy === "x" ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <XLogo className="size-3.5" />
+              )}
+              Share to X
             </Button>
             <Button variant="secondary" disabled={busy === "share"} onClick={handleShare}>
               {busy === "share" ? (
@@ -445,10 +492,21 @@ function EditorPage() {
             the old one keeps the old design.
           </p>
 
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button variant="outline" asChild>
               <a href={shareLink ?? "#"} target="_blank" rel="noreferrer">
                 Open
+              </a>
+            </Button>
+            <Button variant="secondary" asChild>
+              {/* The link already exists here, so this is a plain anchor — no
+                  upload to await, and nothing for a popup blocker to catch. */}
+              <a
+                href={shareLink ? tweetIntentUrl(shareCaption(card.name), shareLink) : "#"}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <XLogo className="size-3.5" /> Post to X
               </a>
             </Button>
             <Button onClick={() => setShareLink(null)}>Done</Button>
@@ -771,6 +829,20 @@ function EditorPage() {
       {/* Mobile action bar — the two things anyone actually came here to do,
           pinned above the home indicator. */}
       <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-border bg-card/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:hidden">
+        {/* Icon-only so three actions still fit a narrow phone. */}
+        <Button
+          variant="outline"
+          className="h-12 w-12 shrink-0"
+          disabled={busy === "x"}
+          onClick={handleShareToX}
+          aria-label="Share to X"
+        >
+          {busy === "x" ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <XLogo className="size-4" />
+          )}
+        </Button>
         <Button
           variant="secondary"
           className="h-12 flex-1"

@@ -9,6 +9,17 @@ export function shareCaption(name: string) {
 }
 
 /**
+ * X's web intent. It cannot attach an image — the tweet's picture has to come
+ * from the link's own OG tags, which is exactly what /c/$id serves. The
+ * hashtag rides inside the caption rather than the `hashtags` param so it
+ * reads as a sentence instead of being appended after the URL.
+ */
+export function tweetIntentUrl(caption: string, link: string) {
+  const params = new URLSearchParams({ text: caption, url: link });
+  return `https://x.com/intent/tweet?${params.toString()}`;
+}
+
+/**
  * Share links carry their own payload — the badge's CDN URL plus the name for
  * the OG title — so /c/$id resolves with no database behind it. base64url keeps
  * it path-safe; the `v1.` prefix leaves room to change the encoding later

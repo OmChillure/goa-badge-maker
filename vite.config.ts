@@ -7,6 +7,11 @@
 import { defineConfig } from "@lovable.dev/vite-tanstack-config";
 
 export default defineConfig({
+  // Without this, nitro falls back to its `cloudflare-module` default and emits
+  // a Worker bundle, which Vercel cannot run as a server — every route then
+  // fails SSR with "This page didn't load". NITRO_PRESET still wins if set, so
+  // another target can override this without editing the file.
+  nitro: { preset: process.env["NITRO_PRESET"] ?? "vercel" },
   tanstackStart: {
     // Redirect TanStack Start's bundled server entry to src/server.ts (our SSR error wrapper).
     // nitro/vite builds from this
