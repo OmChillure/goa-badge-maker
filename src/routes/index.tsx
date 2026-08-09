@@ -122,6 +122,17 @@ function EditorPage() {
     }
   }, [card]);
 
+  // The ID number is derived from the name so every attendee gets a stable,
+  // unique-looking badge number without being able to edit it.
+  useEffect(() => {
+    let h = 0;
+    for (const ch of card.name.trim().toUpperCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const serial = String(h % 10000).padStart(4, "0");
+    const next = `HHG-2026-${serial}`;
+    setCard((c) => (c.idNumber === next ? c : { ...c, idNumber: next }));
+  }, [card.name]);
+
+
   useEffect(() => {
     const el = stageRef.current;
     if (!el) return;
