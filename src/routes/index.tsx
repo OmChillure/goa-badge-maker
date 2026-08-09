@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toPng } from "html-to-image";
 import { getFontEmbedCss } from "@/lib/font-embed";
 import { toast } from "sonner";
-import { Copy, Download, Loader2, RefreshCw, Share2, Sparkles, Upload, X } from "lucide-react";
+import { Copy, Download, Loader2, Lock, RefreshCw, Share2, Sparkles, Upload, X } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
 import {
   ACCENTS,
@@ -63,26 +63,32 @@ function Field({
   value,
   onChange,
   placeholder,
+  locked,
 }: {
   label: string;
   value: string;
-  onChange: (v: string) => void;
+  onChange?: (v: string) => void;
   placeholder?: string;
+  locked?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+      <Label className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
         {label}
+        {locked ? <Lock className="size-3" /> : null}
       </Label>
       <Input
         value={value}
         placeholder={placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        className="bg-card"
+        readOnly={locked}
+        tabIndex={locked ? -1 : undefined}
+        onChange={(e) => onChange?.(e.target.value)}
+        className={locked ? "bg-muted/60 text-muted-foreground cursor-not-allowed" : "bg-card"}
       />
     </div>
   );
 }
+
 
 function EditorPage() {
   const [card, setCard] = useState<CardData>(defaultCard);
@@ -115,6 +121,17 @@ function EditorPage() {
       /* quota — ignore */
     }
   }, [card]);
+
+  // The ID number is derived from the name so every attendee gets a stable,
+  // unique-looking badge number without being able to edit it.
+  useEffect(() => {
+    let h = 0;
+    for (const ch of card.name.trim().toUpperCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const serial = String(h % 10000).padStart(4, "0");
+    const next = `HHG-2026-${serial}`;
+    setCard((c) => (c.idNumber === next ? c : { ...c, idNumber: next }));
+  }, [card.name]);
+
 
   useEffect(() => {
     const el = stageRef.current;
@@ -373,7 +390,7 @@ function EditorPage() {
             <TabsContent value="you" className="space-y-4 pt-4">
               <Field label="Name" value={card.name} onChange={(v) => set("name", v)} />
               <Field label="Role badge" value={card.role} onChange={(v) => set("role", v)} />
-              <Field label="ID number" value={card.idNumber} onChange={(v) => set("idNumber", v)} />
+              <Field label="ID number (auto)" value={card.idNumber} locked />
               <div className="space-y-1.5">
                 <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                   Stack (comma separated)
@@ -464,60 +481,33 @@ function EditorPage() {
             </TabsContent>
 
             <TabsContent value="event" className="space-y-4 pt-4">
+              <p className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                <Lock className="size-3.5 shrink-0" />
+                Event details are fixed for Hacker House Goa and can't be edited.
+              </p>
               <div className="grid grid-cols-2 gap-3">
-                <Field
-                  label="Title line 1"
-                  value={card.titleLine1}
-                  onChange={(v) => set("titleLine1", v)}
-                />
-                <Field
-                  label="Title line 2"
-                  value={card.titleLine2}
-                  onChange={(v) => set("titleLine2", v)}
-                />
+                <Field label="Title line 1" value={card.titleLine1} locked />
+                <Field label="Title line 2" value={card.titleLine2} locked />
               </div>
-              <Field
-                label="Sticker text"
-                value={card.stickerText}
-                onChange={(v) => set("stickerText", v)}
-              />
-              <Field label="Tagline" value={card.tagline} onChange={(v) => set("tagline", v)} />
+              <Field label="Sticker text" value={card.stickerText} locked />
+              <Field label="Tagline" value={card.tagline} locked />
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Time" value={card.time} onChange={(v) => set("time", v)} />
-                <Field label="Room" value={card.room} onChange={(v) => set("room", v)} />
+                <Field label="Time" value={card.time} locked />
+                <Field label="Room" value={card.room} locked />
               </div>
-              <Field label="Location" value={card.location} onChange={(v) => set("location", v)} />
-              <Field label="Dates" value={card.dates} onChange={(v) => set("dates", v)} />
-              <Field
-                label="Hype label"
-                value={card.hypeLabel}
-                onChange={(v) => set("hypeLabel", v)}
-              />
+              <Field label="Location" value={card.location} locked />
+              <Field label="Dates" value={card.dates} locked />
+              <Field label="Hype label" value={card.hypeLabel} locked />
 
               <div className="grid grid-cols-2 gap-3">
-                <Field
-                  label="Stamp top"
-                  value={card.stampTop}
-                  onChange={(v) => set("stampTop", v)}
-                />
-                <Field
-                  label="Stamp bottom"
-                  value={card.stampBottom}
-                  onChange={(v) => set("stampBottom", v)}
-                />
+                <Field label="Stamp top" value={card.stampTop} locked />
+                <Field label="Stamp bottom" value={card.stampBottom} locked />
               </div>
-              <Field
-                label="Footer line 1"
-                value={card.footerLine1}
-                onChange={(v) => set("footerLine1", v)}
-              />
-              <Field
-                label="Footer line 2"
-                value={card.footerLine2}
-                onChange={(v) => set("footerLine2", v)}
-              />
-              <Field label="Hashtag" value={card.hashtag} onChange={(v) => set("hashtag", v)} />
+              <Field label="Footer line 1" value={card.footerLine1} locked />
+              <Field label="Footer line 2" value={card.footerLine2} locked />
+              <Field label="Hashtag" value={card.hashtag} locked />
             </TabsContent>
+
 
             <TabsContent value="style" className="space-y-4 pt-4">
               <div className="space-y-1.5">
