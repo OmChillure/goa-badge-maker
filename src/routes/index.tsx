@@ -19,7 +19,7 @@ import {
   type CardData,
 } from "@/lib/card-data";
 
-import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/lib/image-utils";
+import { fileToPortraitDataUrl, dataUrlToPortrait } from "@/lib/image-utils";
 import { streamImage } from "@/lib/streamImage";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -162,7 +162,7 @@ function EditorPage() {
 
   async function handleUpload(file: File) {
     try {
-      const dataUrl = await fileToDownscaledDataUrl(file);
+      const dataUrl = await fileToPortraitDataUrl(file);
       set("portrait", dataUrl);
       setAiPreview(null);
       toast.success("Portrait added");
@@ -181,7 +181,7 @@ function EditorPage() {
       });
       setAiPreview((prev) => {
         if (prev) {
-          void dataUrlToDownscaled(prev.url).then((small) => set("portrait", small));
+          void dataUrlToPortrait(prev.url).then((small) => set("portrait", small));
         }
         return prev;
       });
