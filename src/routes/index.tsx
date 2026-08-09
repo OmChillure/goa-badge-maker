@@ -378,12 +378,18 @@ function EditorPage() {
   // first — but the popup has to be opened synchronously inside the click or
   // the blocker eats it, so open it now and point it at the URL once we have it.
   async function handleShareToX() {
-    const popup = window.open("", "_blank", "noopener,noreferrer,width=600,height=700");
+    // No `noopener` here: it makes window.open return null by design, and we
+    // need the handle to redirect this window once the upload resolves.
+    // Safe because we null out `opener` ourselves before navigating to X.
+    const popup = window.open("about:blank", "_blank", "width=600,height=700");
     setBusy("x");
     try {
       const link = shareLink ?? (await uploadForLink());
       const intent = tweetIntentUrl(shareCaption(card.name), link);
       if (popup && !popup.closed) {
+        // Drop the back-reference before handing the tab to X, which is what
+        // `noopener` would have done for us.
+        popup.opener = null;
         popup.location.replace(intent);
       } else {
         // Blocked anyway — a normal navigation still gets them there.
