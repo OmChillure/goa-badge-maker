@@ -21,6 +21,7 @@ import {
   type CardData,
 } from "@/lib/card-data";
 import { encodeShare, shareCaption, tweetIntentUrl } from "@/lib/share-link";
+import { uploadCardImage } from "@/lib/upload-card";
 
 import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/lib/image-utils";
 import { streamImage } from "@/lib/streamImage";
@@ -321,13 +322,7 @@ function EditorPage() {
     // Flatten onto the paper colour: a transparent PNG renders on a black
     // backdrop in most chat apps.
     const blob = await renderBlob(card.theme.paper);
-    const form = new FormData();
-    form.append("file", new File([blob], fileName(), { type: "image/png" }));
-    form.append("name", card.name);
-
-    const res = await fetch("/api/upload-card", { method: "POST", body: form });
-    if (!res.ok) throw new Error((await res.text()) || "Upload failed");
-    const { url } = (await res.json()) as { url: string };
+    const url = await uploadCardImage(new File([blob], fileName(), { type: "image/png" }));
 
     // Link to the /c/ page rather than the raw PNG — it is the only one of the
     // two that carries og:image, so the preview shows the badge.
