@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toPng } from "html-to-image";
 import { getFontEmbedCss } from "@/lib/font-embed";
 import { toast } from "sonner";
-import { Download, Loader2, RefreshCw, Share2, Sparkles, Upload, X } from "lucide-react";
+import { Copy, Download, Loader2, RefreshCw, Share2, Sparkles, Upload, X } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
 import {
   ACCENTS,
@@ -26,6 +26,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -126,8 +133,15 @@ function EditorPage() {
   const [shareUrl, setShareUrl] = useState("https://hhgoa.com/");
   useEffect(() => setShareUrl(window.location.origin), []);
 
-  const set = <K extends keyof CardData>(key: K, value: CardData[K]) =>
+  // The uploaded CDN link for the current card, once it has been shared.
+  const [shareLink, setShareLink] = useState<string | null>(null);
+
+  // A share link is a snapshot of the PNG at upload time, so any edit makes the
+  // existing one stale — drop it and let the user re-share.
+  const set = <K extends keyof CardData>(key: K, value: CardData[K]) => {
+    setShareLink(null);
     setCard((c) => ({ ...c, [key]: value }));
+  };
 
   async function handleUpload(file: File) {
     try {
@@ -165,17 +179,61 @@ function EditorPage() {
   const fileName = () =>
     `${card.name.replace(/\s+/g, "-").toLowerCase() || "hacker-house"}-id-card.png`;
 
-  async function renderPng() {
+  // The badge body starts at y=150; above it sits only the lanyard and its
+  // 300px clip, so the full-width canvas leaves a wide empty band either side
+  // of the strap. Re-draw onto a canvas that keeps full width from the body
+  // down but only strap width above it, so the export hugs the artwork.
+  async function cropToStrap(dataUrl: string, backgroundColor?: string) {
+    const img = new Image();
+    img.src = dataUrl;
+    await img.decode();
+
+    const s = img.width / CARD_W; // device pixel ratio baked in by toPng
+    const bodyTop = 150 * s;
+    const strapW = 300 * s;
+    const strapX = (img.width - strapW) / 2;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+
+    if (backgroundColor) {
+      // Paint only where artwork actually is, leaving the flanks transparent.
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(strapX, 0, strapW, bodyTop);
+      ctx.fillRect(0, bodyTop, img.width, img.height - bodyTop);
+    }
+
+    ctx.drawImage(img, strapX, 0, strapW, bodyTop, strapX, 0, strapW, bodyTop);
+    ctx.drawImage(
+      img,
+      0,
+      bodyTop,
+      img.width,
+      img.height - bodyTop,
+      0,
+      bodyTop,
+      img.width,
+      img.height - bodyTop,
+    );
+
+    return canvas.toDataURL("image/png");
+  }
+
+  async function renderPng(backgroundColor?: string) {
     if (!cardRef.current) throw new Error("Card not ready");
     await document.fonts.ready;
     const fontEmbedCSS = await getFontEmbedCss();
-    return toPng(cardRef.current, {
+    const raw = await toPng(cardRef.current, {
       pixelRatio: 2,
       width: CARD_W,
       height: CARD_H,
       cacheBust: true,
       fontEmbedCSS,
     });
+    return cropToStrap(raw, backgroundColor);
   }
 
   async function handleDownload() {
@@ -193,32 +251,26 @@ function EditorPage() {
     }
   }
 
-  // Cards are never uploaded anywhere, so "share" hands the rendered PNG to the
-  // OS share sheet. Browsers without file sharing fall back to a download.
+  // There is no database: the badge is flattened to a PNG, uploaded, and the
+  // resulting CDN URL *is* the share link. Editing and re-sharing mints a new
+  // URL rather than updating the old one.
   async function handleShare() {
     setBusy("share");
     try {
-      const blob = await (await fetch(await renderPng())).blob();
-      const file = new File([blob], fileName(), { type: "image/png" });
+      const blob = await (await fetch(await renderPng(card.theme.paper))).blob();
 
-      if (navigator.canShare?.({ files: [file] })) {
-        try {
-          await navigator.share({ title: `${card.name} — Hacker House Goa`, files: [file] });
-        } catch (e) {
-          if ((e as Error)?.name === "AbortError") return;
-          throw e;
-        }
-        return;
-      }
+      const form = new FormData();
+      form.append("file", new File([blob], fileName(), { type: "image/png" }));
+      form.append("name", card.name);
 
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = fileName();
-      a.click();
-      URL.revokeObjectURL(a.href);
-      toast.success("Card saved — share the image from your device");
-    } catch {
-      toast.error("Could not share the card");
+      const res = await fetch("/api/upload-card", { method: "POST", body: form });
+      if (!res.ok) throw new Error((await res.text()) || "Upload failed");
+      const { url } = (await res.json()) as { url: string };
+
+      setShareLink(url);
+      await navigator.clipboard?.writeText(url).catch(() => {});
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not share the card");
     } finally {
       setBusy(null);
     }
@@ -237,7 +289,13 @@ function EditorPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => setCard(defaultCard)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShareLink(null);
+                setCard(defaultCard);
+              }}
+            >
               <RefreshCw className="size-4" /> Reset
             </Button>
             <Button variant="secondary" disabled={busy === "share"} onClick={handleShare}>
@@ -246,7 +304,7 @@ function EditorPage() {
               ) : (
                 <Share2 className="size-4" />
               )}
-              Share card
+              Get share link
             </Button>
             <Button disabled={busy === "png"} onClick={handleDownload}>
               {busy === "png" ? (
@@ -258,7 +316,48 @@ function EditorPage() {
             </Button>
           </div>
         </div>
+
       </header>
+
+      <Dialog open={!!shareLink} onOpenChange={(o) => !o && setShareLink(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Your card is live</DialogTitle>
+            <DialogDescription>
+              The link is already copied to your clipboard. Anyone with it can view your
+              card.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex items-center gap-2">
+            <Input readOnly value={shareLink ?? ""} onFocus={(e) => e.currentTarget.select()} />
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (!shareLink) return;
+                void navigator.clipboard?.writeText(shareLink);
+                toast.success("Link copied");
+              }}
+            >
+              <Copy className="size-4" /> Copy
+            </Button>
+          </div>
+
+          <p className="text-xs text-muted-foreground">
+            This link points at a snapshot of the card. Edit it and share again to get a
+            new link — the old one keeps the old design.
+          </p>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" asChild>
+              <a href={shareLink ?? "#"} target="_blank" rel="noreferrer">
+                Open
+              </a>
+            </Button>
+            <Button onClick={() => setShareLink(null)}>Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <main className="mx-auto grid max-w-[1500px] gap-6 p-5 lg:grid-cols-[420px_1fr]">
         {/* editor */}

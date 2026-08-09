@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiGeneratePortraitRouteImport } from './routes/api/generate-portrait'
+import { Route as ApiUploadCardRouteImport } from './routes/api/upload-card'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +23,40 @@ const ApiGeneratePortraitRoute = ApiGeneratePortraitRouteImport.update({
   path: '/api/generate-portrait',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiUploadCardRoute = ApiUploadCardRouteImport.update({
+  id: '/api/upload-card',
+  path: '/api/upload-card',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/generate-portrait': typeof ApiGeneratePortraitRoute
+  '/api/upload-card': typeof ApiUploadCardRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/generate-portrait': typeof ApiGeneratePortraitRoute
+  '/api/upload-card': typeof ApiUploadCardRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/generate-portrait': typeof ApiGeneratePortraitRoute
+  '/api/upload-card': typeof ApiUploadCardRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/generate-portrait'
+  fullPaths: '/' | '/api/generate-portrait' | '/api/upload-card'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/generate-portrait'
-  id: '__root__' | '/' | '/api/generate-portrait'
+  to: '/' | '/api/generate-portrait' | '/api/upload-card'
+  id: '__root__' | '/' | '/api/generate-portrait' | '/api/upload-card'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiGeneratePortraitRoute: typeof ApiGeneratePortraitRoute
+  ApiUploadCardRoute: typeof ApiUploadCardRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +75,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiGeneratePortraitRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/upload-card': {
+      id: '/api/upload-card'
+      path: '/api/upload-card'
+      fullPath: '/api/upload-card'
+      preLoaderRoute: typeof ApiUploadCardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiGeneratePortraitRoute: ApiGeneratePortraitRoute,
+  ApiUploadCardRoute: ApiUploadCardRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
