@@ -379,7 +379,7 @@ function EditorPage() {
             <TabsContent value="you" className="space-y-4 pt-4">
               <Field label="Name" value={card.name} onChange={(v) => set("name", v)} />
               <Field label="Role badge" value={card.role} onChange={(v) => set("role", v)} />
-              <Field label="ID number" value={card.idNumber} onChange={(v) => set("idNumber", v)} />
+              <Field label="ID number (auto)" value={card.idNumber} locked />
               <div className="space-y-1.5">
                 <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
                   Stack (comma separated)
