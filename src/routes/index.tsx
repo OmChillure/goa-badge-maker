@@ -3,7 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { toPng } from "html-to-image";
 import { getFontEmbedCss } from "@/lib/font-embed";
 import { toast } from "sonner";
-import { Copy, Download, Loader2, RefreshCw, Share2, Sparkles, Upload, X } from "lucide-react";
+import { Copy, Download, Loader2, Lock, RefreshCw, Share2, Sparkles, Upload, X } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
 import {
   ACCENTS,
