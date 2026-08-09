@@ -470,60 +470,33 @@ function EditorPage() {
             </TabsContent>
 
             <TabsContent value="event" className="space-y-4 pt-4">
+              <p className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                <Lock className="size-3.5 shrink-0" />
+                Event details are fixed for Hacker House Goa and can't be edited.
+              </p>
               <div className="grid grid-cols-2 gap-3">
-                <Field
-                  label="Title line 1"
-                  value={card.titleLine1}
-                  onChange={(v) => set("titleLine1", v)}
-                />
-                <Field
-                  label="Title line 2"
-                  value={card.titleLine2}
-                  onChange={(v) => set("titleLine2", v)}
-                />
+                <Field label="Title line 1" value={card.titleLine1} locked />
+                <Field label="Title line 2" value={card.titleLine2} locked />
               </div>
-              <Field
-                label="Sticker text"
-                value={card.stickerText}
-                onChange={(v) => set("stickerText", v)}
-              />
-              <Field label="Tagline" value={card.tagline} onChange={(v) => set("tagline", v)} />
+              <Field label="Sticker text" value={card.stickerText} locked />
+              <Field label="Tagline" value={card.tagline} locked />
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Time" value={card.time} onChange={(v) => set("time", v)} />
-                <Field label="Room" value={card.room} onChange={(v) => set("room", v)} />
+                <Field label="Time" value={card.time} locked />
+                <Field label="Room" value={card.room} locked />
               </div>
-              <Field label="Location" value={card.location} onChange={(v) => set("location", v)} />
-              <Field label="Dates" value={card.dates} onChange={(v) => set("dates", v)} />
-              <Field
-                label="Hype label"
-                value={card.hypeLabel}
-                onChange={(v) => set("hypeLabel", v)}
-              />
+              <Field label="Location" value={card.location} locked />
+              <Field label="Dates" value={card.dates} locked />
+              <Field label="Hype label" value={card.hypeLabel} locked />
 
               <div className="grid grid-cols-2 gap-3">
-                <Field
-                  label="Stamp top"
-                  value={card.stampTop}
-                  onChange={(v) => set("stampTop", v)}
-                />
-                <Field
-                  label="Stamp bottom"
-                  value={card.stampBottom}
-                  onChange={(v) => set("stampBottom", v)}
-                />
+                <Field label="Stamp top" value={card.stampTop} locked />
+                <Field label="Stamp bottom" value={card.stampBottom} locked />
               </div>
-              <Field
-                label="Footer line 1"
-                value={card.footerLine1}
-                onChange={(v) => set("footerLine1", v)}
-              />
-              <Field
-                label="Footer line 2"
-                value={card.footerLine2}
-                onChange={(v) => set("footerLine2", v)}
-              />
-              <Field label="Hashtag" value={card.hashtag} onChange={(v) => set("hashtag", v)} />
+              <Field label="Footer line 1" value={card.footerLine1} locked />
+              <Field label="Footer line 2" value={card.footerLine2} locked />
+              <Field label="Hashtag" value={card.hashtag} locked />
             </TabsContent>
+
 
             <TabsContent value="style" className="space-y-4 pt-4">
               <div className="space-y-1.5">
