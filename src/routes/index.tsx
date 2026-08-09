@@ -5,6 +5,7 @@ import { getFontEmbedCss } from "@/lib/font-embed";
 import { toast } from "sonner";
 import { Copy, Download, Loader2, RefreshCw, Share2, Sparkles, Upload, X } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
+import { PortraitCropper } from "@/components/card/PortraitCropper";
 import {
   ACCENTS,
   ACCENT_LABELS,
@@ -12,12 +13,14 @@ import {
   BASE_LABELS,
   buildTheme,
   defaultCard,
+  defaultCrop,
   detectAccent,
   detectBase,
   mergeCard,
   themePresets,
   type CardData,
 } from "@/lib/card-data";
+import { encodeShare, SHARE_HASHTAG, shareCaption } from "@/lib/share-link";
 
 import { fileToDownscaledDataUrl, dataUrlToDownscaled } from "@/lib/image-utils";
 import { streamImage } from "@/lib/streamImage";
@@ -96,6 +99,11 @@ function EditorPage() {
   const cardRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
 
+  // Rendering the same unchanged card twice (download, then share) is pure
+  // waste, and the export is the slowest thing the app does. Cache the last
+  // PNG against the card state that produced it; any edit clears it via `set`.
+  const pngCache = useRef<{ key: string; opaque: boolean; blob: Blob } | null>(null);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -140,15 +148,20 @@ function EditorPage() {
   // existing one stale — drop it and let the user re-share.
   const set = <K extends keyof CardData>(key: K, value: CardData[K]) => {
     setShareLink(null);
+    pngCache.current = null;
     setCard((c) => ({ ...c, [key]: value }));
   };
 
   async function handleUpload(file: File) {
     try {
       const dataUrl = await fileToDownscaledDataUrl(file);
-      set("portrait", dataUrl);
+      setShareLink(null);
+      pngCache.current = null;
+      // A new photo has nothing to do with how the last one was framed, so
+      // reset to the auto "cover" fit in the same update.
+      setCard((c) => ({ ...c, portrait: dataUrl, crop: defaultCrop }));
       setAiPreview(null);
-      toast.success("Portrait added");
+      toast.success("Portrait added — drag it to reframe");
     } catch {
       toast.error("Could not read that image");
     }
@@ -164,7 +177,11 @@ function EditorPage() {
       });
       setAiPreview((prev) => {
         if (prev) {
-          void dataUrlToDownscaled(prev.url).then((small) => set("portrait", small));
+          void dataUrlToDownscaled(prev.url).then((small) => {
+            setShareLink(null);
+            pngCache.current = null;
+            setCard((c) => ({ ...c, portrait: small, crop: defaultCrop }));
+          });
         }
         return prev;
       });
@@ -183,7 +200,7 @@ function EditorPage() {
   // 300px clip, so the full-width canvas leaves a wide empty band either side
   // of the strap. Re-draw onto a canvas that keeps full width from the body
   // down but only strap width above it, so the export hugs the artwork.
-  async function cropToStrap(dataUrl: string, backgroundColor?: string) {
+  async function cropToStrap(dataUrl: string, backgroundColor?: string): Promise<Blob> {
     const img = new Image();
     img.src = dataUrl;
     await img.decode();
@@ -197,7 +214,7 @@ function EditorPage() {
     canvas.width = img.width;
     canvas.height = img.height;
     const ctx = canvas.getContext("2d");
-    if (!ctx) return dataUrl;
+    if (!ctx) return await (await fetch(dataUrl)).blob();
 
     if (backgroundColor) {
       // Paint only where artwork actually is, leaving the flanks transparent.
@@ -219,30 +236,67 @@ function EditorPage() {
       img.height - bodyTop,
     );
 
-    return canvas.toDataURL("image/png");
+    // toBlob avoids the base64 detour toDataURL forces on a ~3 MB image.
+    return await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob(
+        (b) => (b ? resolve(b) : reject(new Error("Could not encode the card"))),
+        "image/png",
+      ),
+    );
   }
 
-  async function renderPng(backgroundColor?: string) {
+  async function renderBlob(backgroundColor?: string): Promise<Blob> {
+    const key = JSON.stringify(card);
+    const opaque = !!backgroundColor;
+    const hit = pngCache.current;
+    if (hit && hit.key === key && hit.opaque === opaque) return hit.blob;
+
     if (!cardRef.current) throw new Error("Card not ready");
+    // `cacheBust` re-downloads every image on each export, which on a phone is
+    // seconds of needless network. The portrait is already an inline data URL
+    // and the artwork is a bundled asset, so there is nothing stale to bust.
     await document.fonts.ready;
     const fontEmbedCSS = await getFontEmbedCss();
     const raw = await toPng(cardRef.current, {
       pixelRatio: 2,
       width: CARD_W,
       height: CARD_H,
-      cacheBust: true,
       fontEmbedCSS,
     });
-    return cropToStrap(raw, backgroundColor);
+    const blob = await cropToStrap(raw, backgroundColor);
+    pngCache.current = { key, opaque, blob };
+    return blob;
+  }
+
+  function triggerDownload(blob: Blob) {
+    const href = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = href;
+    a.download = fileName();
+    a.rel = "noopener";
+    a.click();
+    // Revoke on the next tick — immediately would race the download starting.
+    setTimeout(() => URL.revokeObjectURL(href), 10_000);
   }
 
   async function handleDownload() {
     setBusy("png");
     try {
-      const a = document.createElement("a");
-      a.href = await renderPng();
-      a.download = fileName();
-      a.click();
+      const blob = await renderBlob();
+      // iOS Safari ignores the `download` attribute, so a click there navigates
+      // away instead of saving. Hand the file to the share sheet, where "Save
+      // to Photos" is one tap — that is the real download on a phone.
+      const file = new File([blob], fileName(), { type: "image/png" });
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file] });
+          return;
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          // Anything else: fall through to the classic download.
+        }
+      }
+      triggerDownload(blob);
       toast.success("Card downloaded");
     } catch {
       toast.error("Export failed — try again");
@@ -257,18 +311,46 @@ function EditorPage() {
   async function handleShare() {
     setBusy("share");
     try {
-      const blob = await (await fetch(await renderPng(card.theme.paper))).blob();
+      // Flatten onto the paper colour: a transparent PNG renders on a black
+      // backdrop in most chat apps.
+      const blob = await renderBlob(card.theme.paper);
+      const file = new File([blob], fileName(), { type: "image/png" });
+      const caption = shareCaption(card.name);
+
+      // Attaching the actual image beats any link preview, so try it first.
+      // Instagram and most gallery-style targets only accept files this way.
+      if (navigator.canShare?.({ files: [file] })) {
+        try {
+          await navigator.share({ files: [file], text: caption });
+          return;
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+          // Target refused files — fall through to the link route.
+        }
+      }
 
       const form = new FormData();
-      form.append("file", new File([blob], fileName(), { type: "image/png" }));
+      form.append("file", file);
       form.append("name", card.name);
 
       const res = await fetch("/api/upload-card", { method: "POST", body: form });
       if (!res.ok) throw new Error((await res.text()) || "Upload failed");
       const { url } = (await res.json()) as { url: string };
 
-      setShareLink(url);
-      await navigator.clipboard?.writeText(url).catch(() => {});
+      // Share the /c/ page rather than the raw PNG — it is the only one of the
+      // two that carries og:image, so the preview shows the badge.
+      const link = `${window.location.origin}/c/${encodeShare({ url, name: card.name })}`;
+      setShareLink(link);
+
+      if (navigator.share) {
+        try {
+          await navigator.share({ text: caption, url: link });
+          return;
+        } catch (err) {
+          if (err instanceof DOMException && err.name === "AbortError") return;
+        }
+      }
+      await navigator.clipboard?.writeText(`${caption} ${link}`).catch(() => {});
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not share the card");
     } finally {
@@ -288,11 +370,14 @@ function EditorPage() {
               ID card studio
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          {/* On a phone these live in the sticky bottom bar instead, where a
+              thumb can reach them without scrolling back up. */}
+          <div className="hidden items-center gap-2 sm:flex">
             <Button
               variant="outline"
               onClick={() => {
                 setShareLink(null);
+                pngCache.current = null;
                 setCard(defaultCard);
               }}
             >
@@ -304,7 +389,7 @@ function EditorPage() {
               ) : (
                 <Share2 className="size-4" />
               )}
-              Get share link
+              Share card
             </Button>
             <Button disabled={busy === "png"} onClick={handleDownload}>
               {busy === "png" ? (
@@ -316,7 +401,6 @@ function EditorPage() {
             </Button>
           </div>
         </div>
-
       </header>
 
       <Dialog open={!!shareLink} onOpenChange={(o) => !o && setShareLink(null)}>
@@ -324,10 +408,23 @@ function EditorPage() {
           <DialogHeader>
             <DialogTitle>Your card is live</DialogTitle>
             <DialogDescription>
-              The link is already copied to your clipboard. Anyone with it can view your
-              card.
+              Caption and link are copied to your clipboard — paste them anywhere. The preview will
+              show your badge.
             </DialogDescription>
           </DialogHeader>
+
+          <div className="space-y-1.5">
+            <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+              Caption
+            </Label>
+            <Textarea
+              readOnly
+              rows={2}
+              className="resize-none text-sm"
+              value={shareCaption(card.name)}
+              onFocus={(e) => e.currentTarget.select()}
+            />
+          </div>
 
           <div className="flex items-center gap-2">
             <Input readOnly value={shareLink ?? ""} onFocus={(e) => e.currentTarget.select()} />
@@ -335,8 +432,8 @@ function EditorPage() {
               variant="secondary"
               onClick={() => {
                 if (!shareLink) return;
-                void navigator.clipboard?.writeText(shareLink);
-                toast.success("Link copied");
+                void navigator.clipboard?.writeText(`${shareCaption(card.name)} ${shareLink}`);
+                toast.success("Caption + link copied");
               }}
             >
               <Copy className="size-4" /> Copy
@@ -344,8 +441,8 @@ function EditorPage() {
           </div>
 
           <p className="text-xs text-muted-foreground">
-            This link points at a snapshot of the card. Edit it and share again to get a
-            new link — the old one keeps the old design.
+            This link points at a snapshot of the card. Edit it and share again to get a new link —
+            the old one keeps the old design.
           </p>
 
           <div className="flex justify-end gap-2">
@@ -359,7 +456,7 @@ function EditorPage() {
         </DialogContent>
       </Dialog>
 
-      <main className="mx-auto grid max-w-[1500px] gap-6 p-5 lg:grid-cols-[420px_1fr]">
+      <main className="mx-auto grid max-w-[1500px] gap-6 p-5 pb-28 sm:pb-5 lg:grid-cols-[420px_1fr]">
         {/* editor */}
         <section className="order-2 lg:order-1">
           <Tabs defaultValue="you">
@@ -415,7 +512,8 @@ function EditorPage() {
             <TabsContent value="photo" className="space-y-4 pt-4">
               <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground hover:border-primary">
                 <Upload className="size-5" />
-                Upload a portrait
+                {card.portrait ? "Choose a different photo" : "Upload a portrait"}
+                <span className="text-[11px]">Any shape — you can reframe it after</span>
                 <input
                   type="file"
                   accept="image/*"
@@ -423,9 +521,32 @@ function EditorPage() {
                   onChange={(e) => {
                     const f = e.target.files?.[0];
                     if (f) void handleUpload(f);
+                    // Let the same file be picked again after a reset.
+                    e.target.value = "";
                   }}
                 />
               </label>
+
+              {card.portrait ? (
+                <div className="space-y-2 rounded-lg border border-border bg-card p-4">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                      Reframe
+                    </Label>
+                    <button
+                      onClick={() => set("crop", defaultCrop)}
+                      className="font-mono text-[10px] uppercase tracking-wider text-muted-foreground hover:text-foreground"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                  <PortraitCropper
+                    src={card.portrait}
+                    crop={card.crop}
+                    onChange={(c) => set("crop", c)}
+                  />
+                </div>
+              ) : null}
 
               <div className="space-y-2 rounded-lg border border-border bg-card p-4">
                 <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
@@ -609,6 +730,19 @@ function EditorPage() {
                   </div>
                 ))}
               </div>
+
+              {/* The header Reset is hidden on phones; keep one reachable. */}
+              <Button
+                variant="outline"
+                className="w-full sm:hidden"
+                onClick={() => {
+                  setShareLink(null);
+                  pngCache.current = null;
+                  setCard(defaultCard);
+                }}
+              >
+                <RefreshCw className="size-4" /> Reset card
+              </Button>
             </TabsContent>
           </Tabs>
         </section>
@@ -617,7 +751,7 @@ function EditorPage() {
         <section className="order-1 lg:order-2">
           <div
             ref={stageRef}
-            className="sticky top-5 flex h-[70vh] items-center justify-center overflow-hidden rounded-2xl border border-border bg-[radial-gradient(circle_at_50%_0%,color-mix(in_oklab,var(--color-primary)_18%,transparent),transparent_60%)] lg:h-[calc(100vh-7rem)]"
+            className="sticky top-5 flex h-[56vh] items-center justify-center overflow-hidden rounded-2xl border border-border bg-[radial-gradient(circle_at_50%_0%,color-mix(in_oklab,var(--color-primary)_18%,transparent),transparent_60%)] sm:h-[70vh] lg:h-[calc(100vh-7rem)]"
           >
             <div
               style={{
@@ -633,6 +767,32 @@ function EditorPage() {
           </div>
         </section>
       </main>
+
+      {/* Mobile action bar — the two things anyone actually came here to do,
+          pinned above the home indicator. */}
+      <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t border-border bg-card/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] backdrop-blur sm:hidden">
+        <Button
+          variant="secondary"
+          className="h-12 flex-1"
+          disabled={busy === "share"}
+          onClick={handleShare}
+        >
+          {busy === "share" ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Share2 className="size-4" />
+          )}
+          Share
+        </Button>
+        <Button className="h-12 flex-1" disabled={busy === "png"} onClick={handleDownload}>
+          {busy === "png" ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <Download className="size-4" />
+          )}
+          Save image
+        </Button>
+      </div>
     </div>
   );
 }

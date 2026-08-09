@@ -377,7 +377,18 @@ export const HackerCard = forwardRef<HTMLDivElement, Props>(function HackerCard(
                 <img
                   src={data.portrait}
                   alt={data.name}
-                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    // `cover` already fills the frame without distorting any
+                    // aspect ratio; zoom scales past that fit and the
+                    // percentage translate walks the overflow into view.
+                    objectFit: "cover",
+                    transform: `scale(${data.crop.zoom}) translate(${data.crop.x * 100}%, ${
+                      data.crop.y * 100
+                    }%)`,
+                    transformOrigin: "center",
+                  }}
                 />
               ) : (
                 <div

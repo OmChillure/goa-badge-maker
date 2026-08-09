@@ -1,36 +1,11 @@
-# Goa ID Creator
+# Hacker House Goa — ID Card Studio
 
-Refer this image and prompt
+Build a luxury tropical event ID badge for Hacker House Goa: fill in your
+details, drop in a photo, and share it or save it as a high-res PNG.
 
-
-
-{
-
-  "prompt": "Design a premium luxury vertical event ID card for 'Hacker House Goa' in an elegant tropical vintage aesthetic. The card should look like a real laminated conference badge hanging from a dark green fabric lanyard with golden metal clip. Use an off-white textured paper background with deep emerald green accents, gold foil details, soft pink highlights, palm leaf shadows and a luxurious editorial feel.\n\nAt the top, place huge serif typography reading 'HACKER HOUSE' with a small pink Hindi sticker saying 'गोवा' overlapping between the words. Below it write 'CODE. CREATE. COLLABORATE.' in elegant spaced typography.\n\nTop left contains:\n• Time: 2:47PM\n• STUDIO\n• GOA, INDIA\n• 28–31 OCT 2026\n\nTop right contains:\n• CHECK HYPE\n• APPLY button\n• Circular Hacker House Goa stamp with palm tree illustration.\n\nMain section:\nA large rounded portrait frame with thin gold border containing a stylish founder portrait looking sideways during golden hour on a Goa beach. Soft sunset lighting, premium fashion photography, cinematic color grading.\n\nTo the right place handwritten luxury script for the name.\nBelow the name place a dark emerald badge with gold border reading 'FOUNDER'.\n\nBelow that add a stack section:\nPYTHON • FASTAPI • REACT\nNEXT.JS • TAILWIND • FIGMA\nFIREBASE • POSTGRESQL • AWS\nDOCKER • GIT • VERCEL\n\nBottom information panel:\nDark emerald background with gold separators.\nLeft:\nID NUMBER\nHHG-2026-0007\n\nCenter:\nLuxury QR code with HH logo.\n\nRight:\nVALID DATES\n28–31 OCT 2026\nLOCATION\nGOA, INDIA\n\nBottom artwork:\nA detailed illustrated Goa beach village with palm trees, cottages, surfboards, sunset, ocean waves, Hacker House café, warm lighting and retro travel poster style.\n\nFooter:\nCODE. CREATE. COLLABORATE.\nBUILT DIFFERENT. SHIP ANYWAY.\n#HACKERHOUSEGOA\nSmall gold globe icon on the right.\n\nOverall design should feel like Apple + Stripe + luxury conference branding + tropical Goa + premium magazine editorial. Use gold foil effects, subtle shadows, realistic lamination, rounded corners, premium typography hierarchy, soft grain texture, depth, reflections, modern UI design, high contrast, ultra detailed, luxury branding, photorealistic print quality.",
-
-  "negative_prompt": "low quality, blurry, watermark, logo distortion, bad typography, extra hands, extra people, duplicated elements, cartoon, oversaturated colors, noisy image, poor composition, stretched text, broken QR code, cluttered layout",
-
-  "size": "1024x1536",
-
-  "style": "photorealistic",
-
-  "quality": "ultra",
-
-  "lighting": "golden hour cinematic",
-
-  "camera": "85mm portrait",
-
-  "render": "premium print quality",
-
-  "aspect_ratio": "2:3"
-
-}
-
-
-
-
-
-And make.me.a site which take the user info and make this extract same id card for the user which he can actually share with user just make sure it can edit the info and make it work proper and i need 120% id card just detailed will change
+The badge is a vertical laminated conference card on a green lanyard —
+off-white textured paper, deep emerald panels, gold foil edging, a pink Devanagari
+sticker, palm-leaf shadows, a QR code and an illustrated Goa beach village.
 
 ## Development
 
@@ -50,22 +25,40 @@ Copy `.env.example` to `.env`. Never commit `.env` — it is gitignored.
 
 | Variable | Required for | Notes |
 | --- | --- | --- |
-| `LOVABLE_API_KEY` | AI portrait generation | Server-side only. Used by `src/routes/api/generate-portrait.ts` |
+| `UPLOADTHING_TOKEN` | Share links | Server-side only. The rendered PNG is uploaded and the CDN URL backs the share page. Without it, sharing falls back to attaching the image file directly. |
+| `AI_GATEWAY_API_KEY` | AI portrait generation | Server-side only. Used by `src/routes/api/generate-portrait.ts`. |
+| `AI_GATEWAY_URL` | — | Optional. Any OpenAI-compatible image endpoint. |
+| `AI_IMAGE_MODEL` | — | Optional. Defaults to a Gemini flash image model. |
 
-It is the only variable. Without it everything works except the
-"Generate portrait" button — you can still upload your own photo.
+Everything works without the AI key except the "Generate portrait" button —
+you can always upload your own photo.
 
 ## Architecture
 
-There is no database and no user data leaves the browser.
+There is no database. Card details never leave the browser; only the flattened
+PNG is uploaded, and only when you press Share.
 
 - **TanStack Start** (React 19, file-based routes in `src/routes`) on Vite.
-- **`/`** — the card editor, the app's only page. Card state lives in React and
-  persists to `localStorage` under `hhg-card-v1`; portraits are stored inline as
-  downscaled data URLs.
-- **PNG export** — rendered client-side with `html-to-image`. "Share card" hands
-  that PNG to the OS share sheet via the Web Share API, falling back to a
-  download where file sharing is unsupported.
-- **`/api/generate-portrait`** — the one server route. It proxies a prompt to an
-  AI image gateway and streams the result back, so the API key stays off the
-  client. Nothing is persisted.
+- **`/`** — the card editor. Card state lives in React and persists to
+  `localStorage` under `hhg-card-v1`; portraits are stored inline as downscaled
+  data URLs.
+- **`/c/$id`** — the public view of a shared badge. The badge's CDN URL and name
+  are encoded into the path itself, so the page resolves its `og:image` during
+  SSR with no database behind it. This route exists because a bare CDN PNG has
+  no OG tags and would preview as a blank thumbnail.
+- **PNG export** — rendered client-side with `html-to-image`, then re-drawn onto
+  a canvas that trims the empty flanks either side of the lanyard. The last
+  render is cached against the card state, so sharing right after downloading
+  reuses it instead of rendering twice.
+- **Sharing** — attaches the actual PNG through the Web Share API where the
+  target accepts files (best on phones), and otherwise uploads it and shares a
+  `/c/$id` link. Both carry a pre-filled caption ending in `#FrameInGoa`.
+- **Portrait framing** — uploads auto-fill the frame with a `cover` fit; drag
+  and pinch/slider adjust it. The crop is stored normalised (`x`/`y` as
+  fractions of the overflow, `zoom` relative to the fit) so it means the same
+  thing on screen and at export resolution.
+- **`/api/generate-portrait`** — proxies a prompt to an AI image gateway and
+  streams the result back, so the API key stays off the client. Nothing is
+  persisted.
+- **`/api/upload-card`** — validates and re-wraps the PNG server-side, then
+  uploads it. Only the image is stored.

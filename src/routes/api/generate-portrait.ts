@@ -8,14 +8,20 @@ export const Route = createFileRoute("/api/generate-portrait")({
         const prompt = (body.prompt ?? "").toString().slice(0, 600).trim();
         if (!prompt) return new Response("Missing prompt", { status: 400 });
 
-        const key = process.env["LOVABLE_API_KEY"];
-        if (!key) return new Response("Missing LOVABLE_API_KEY", { status: 500 });
+        const key = process.env["AI_GATEWAY_API_KEY"];
+        if (!key) return new Response("Missing AI_GATEWAY_API_KEY", { status: 500 });
 
-        const upstream = await fetch("https://ai.gateway.lovable.dev/v1/images/generations", {
+        // Endpoint and model are configuration, not code — point them at any
+        // OpenAI-compatible image gateway without touching this handler.
+        const endpoint =
+          process.env["AI_GATEWAY_URL"] ?? "https://ai.gateway.lovable.dev/v1/images/generations";
+        const model = process.env["AI_IMAGE_MODEL"] ?? "google/gemini-3.1-flash-image";
+
+        const upstream = await fetch(endpoint, {
           method: "POST",
           headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: "google/gemini-3.1-flash-image",
+            model,
             messages: [
               {
                 role: "user",

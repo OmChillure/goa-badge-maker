@@ -6,6 +6,31 @@ export type CardTheme = {
   ink: string;
 };
 
+/**
+ * How the portrait sits inside the badge's frame. `zoom` is relative to the
+ * "cover" fit (1 = exactly fills the frame), and `x`/`y` are the offsets from
+ * centre in fractions of the *overflow* — so ±0.5 walks the image to either
+ * edge regardless of how much bigger than the frame it happens to be. Keeping
+ * them normalised means the same crop survives a re-upload at a different
+ * resolution, and clamping is a single expression.
+ */
+export type PortraitCrop = { x: number; y: number; zoom: number };
+
+export const defaultCrop: PortraitCrop = { x: 0, y: 0, zoom: 1 };
+
+export const MIN_ZOOM = 1;
+export const MAX_ZOOM = 4;
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+
+export function clampCrop(crop: PortraitCrop): PortraitCrop {
+  return {
+    zoom: clamp(crop.zoom, MIN_ZOOM, MAX_ZOOM),
+    x: clamp(crop.x, -0.5, 0.5),
+    y: clamp(crop.y, -0.5, 0.5),
+  };
+}
+
 export type CardData = {
   // event / branding
   titleLine1: string;
@@ -26,6 +51,7 @@ export type CardData = {
   idNumber: string;
   stack: string[];
   portrait: string | null;
+  crop: PortraitCrop;
   // footer
   footerLine1: string;
   footerLine2: string;
@@ -111,7 +137,6 @@ export const themePresets: { name: string; theme: CardTheme }[] = [
   { name: "Ocean · Coral", theme: buildTheme("ocean", "coral") },
 ];
 
-
 export const defaultCard: CardData = {
   titleLine1: "HACKER",
   titleLine2: "HOUSE",
@@ -143,9 +168,10 @@ export const defaultCard: CardData = {
     "VERCEL",
   ],
   portrait: null,
+  crop: defaultCrop,
   footerLine1: "CODE. CREATE. COLLABORATE.",
   footerLine2: "BUILT DIFFERENT. SHIP ANYWAY.",
-  hashtag: "#HACKERHOUSEGOA",
+  hashtag: "#FRAMEINGOA",
   theme: defaultTheme,
 };
 
@@ -155,6 +181,7 @@ export function mergeCard(input: unknown): CardData {
     ...defaultCard,
     ...raw,
     stack: Array.isArray(raw.stack) ? raw.stack.filter(Boolean).slice(0, 24) : defaultCard.stack,
+    crop: clampCrop({ ...defaultCrop, ...(raw.crop ?? {}) }),
     theme: { ...defaultTheme, ...(raw.theme ?? {}) },
   };
 }
