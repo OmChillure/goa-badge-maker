@@ -32,23 +32,40 @@ Refer this image and prompt
 
 And make.me.a site which take the user info and make this extract same id card for the user which he can actually share with user just make sure it can edit the info and make it work proper and i need 120% id card just detailed will change
 
-This project was built with [Lovable](https://lovable.dev).
-
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/42c93535-5f5a-43d7-9ae2-d3090b0b1cdc).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
-
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
 
 ```sh
 git clone <this-repository-url>
 cd <repository-name>
 npm i
+cp .env.example .env   # then fill in the values
 npm run dev
 ```
+
+## Environment
+
+Copy `.env.example` to `.env`. Never commit `.env` — it is gitignored.
+
+| Variable | Required for | Notes |
+| --- | --- | --- |
+| `LOVABLE_API_KEY` | AI portrait generation | Server-side only. Used by `src/routes/api/generate-portrait.ts` |
+
+It is the only variable. Without it everything works except the
+"Generate portrait" button — you can still upload your own photo.
+
+## Architecture
+
+There is no database and no user data leaves the browser.
+
+- **TanStack Start** (React 19, file-based routes in `src/routes`) on Vite.
+- **`/`** — the card editor, the app's only page. Card state lives in React and
+  persists to `localStorage` under `hhg-card-v1`; portraits are stored inline as
+  downscaled data URLs.
+- **PNG export** — rendered client-side with `html-to-image`. "Share card" hands
+  that PNG to the OS share sheet via the Web Share API, falling back to a
+  download where file sharing is unsupported.
+- **`/api/generate-portrait`** — the one server route. It proxies a prompt to an
+  AI image gateway and streams the result back, so the API key stays off the
+  client. Nothing is persisted.
