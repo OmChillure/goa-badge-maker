@@ -3,6 +3,27 @@ import { createFileRoute } from "@tanstack/react-router";
 import { ArrowRight, Download, Palette, Share2, Sparkles } from "lucide-react";
 import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
 import { buildTheme, defaultCard, mergeCard, type CardData } from "@/lib/card-data";
+import { toPng } from "html-to-image";
+import { getFontEmbedCss } from "@/lib/font-embed";
+import { toast } from "sonner";
+import { Copy, Download, Loader2, Lock, RefreshCw, Share2, Sparkles, Upload, X } from "lucide-react";
+import { HackerCard, CARD_H, CARD_W } from "@/components/card/HackerCard";
+import {
+  ACCENTS,
+  ACCENT_LABELS,
+  BASES,
+  BASE_LABELS,
+  buildTheme,
+  defaultCard,
+  detectAccent,
+  detectBase,
+  mergeCard,
+  themePresets,
+  type CardData,
+} from "@/lib/card-data";
+
+import { fileToPortraitDataUrl, dataUrlToPortrait } from "@/lib/image-utils";
+import { streamImage } from "@/lib/streamImage";
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/")({
@@ -108,6 +129,43 @@ function CardPreview({ card, scale }: { card: CardData; scale: number }) {
         <HackerCard data={card} shareUrl="https://hhgoa.com/" />
       </div>
     </div>
+function Field({
+  label,
+  value,
+  onChange,
+  placeholder,
+  locked,
+}: {
+  label: string;
+  value: string;
+  onChange?: (v: string) => void;
+  placeholder?: string;
+  locked?: boolean;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="flex items-center gap-1.5 text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+        {locked ? <Lock className="size-3" /> : null}
+      </Label>
+      <Input
+        value={value}
+        placeholder={placeholder}
+        readOnly={locked}
+        tabIndex={locked ? -1 : undefined}
+        onChange={(e) => onChange?.(e.target.value)}
+        className={locked ? "bg-muted/60 text-muted-foreground cursor-not-allowed" : "bg-card"}
+      />
+    </div>
+  );
+}
+
+
+function EditorPage() {
+  const [card, setCard] = useState<CardData>(defaultCard);
+  const [busy, setBusy] = useState<null | "png" | "share" | "ai">(null);
+  const [aiPrompt, setAiPrompt] = useState(
+    "A confident Indian woman founder with long dark hair and sunglasses",
   );
 }
 
@@ -148,6 +206,184 @@ function LandingPage() {
       body: "Export a high-res PNG, or share a link that unfurls your badge in the preview.",
     },
   ];
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ card }));
+    } catch {
+      /* quota — ignore */
+    }
+  }, [card]);
+
+  // The ID number is derived from the name so every attendee gets a stable,
+  // unique-looking badge number without being able to edit it.
+  useEffect(() => {
+    let h = 0;
+    for (const ch of card.name.trim().toUpperCase()) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    const serial = String(h % 10000).padStart(4, "0");
+    const next = `HHG-2026-${serial}`;
+    setCard((c) => (c.idNumber === next ? c : { ...c, idNumber: next }));
+  }, [card.name]);
+
+
+  useEffect(() => {
+    const el = stageRef.current;
+    if (!el) return;
+    const fit = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      setScale(Math.min(w / CARD_W, h / CARD_H, 1));
+    };
+    fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const [shareUrl, setShareUrl] = useState("https://hhgoa.com/");
+  useEffect(() => setShareUrl(window.location.origin), []);
+
+  // The uploaded CDN link for the current card, once it has been shared.
+  const [shareLink, setShareLink] = useState<string | null>(null);
+
+  // A share link is a snapshot of the PNG at upload time, so any edit makes the
+  // existing one stale — drop it and let the user re-share.
+  const set = <K extends keyof CardData>(key: K, value: CardData[K]) => {
+    setShareLink(null);
+    setCard((c) => ({ ...c, [key]: value }));
+  };
+
+  async function handleUpload(file: File) {
+    try {
+      const dataUrl = await fileToPortraitDataUrl(file);
+      set("portrait", dataUrl);
+      setAiPreview(null);
+      toast.success("Portrait added");
+    } catch {
+      toast.error("Could not read that image");
+    }
+  }
+
+  async function handleGenerate() {
+    if (!aiPrompt.trim()) return;
+    setBusy("ai");
+    setAiPreview(null);
+    try {
+      await streamImage("/api/generate-portrait", aiPrompt.trim(), (url, final) => {
+        setAiPreview({ url, final });
+      });
+      setAiPreview((prev) => {
+        if (prev) {
+          void dataUrlToPortrait(prev.url).then((small) => set("portrait", small));
+        }
+        return prev;
+      });
+      toast.success("Portrait generated");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generation failed");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  const fileName = () =>
+    `${card.name.replace(/\s+/g, "-").toLowerCase() || "hacker-house"}-id-card.png`;
+
+  // The badge body starts at y=150; above it sits only the lanyard and its
+  // 300px clip, so the full-width canvas leaves a wide empty band either side
+  // of the strap. Re-draw onto a canvas that keeps full width from the body
+  // down but only strap width above it, so the export hugs the artwork.
+  async function cropToStrap(dataUrl: string, backgroundColor?: string) {
+    const img = new Image();
+    img.src = dataUrl;
+    await img.decode();
+
+    const s = img.width / CARD_W; // device pixel ratio baked in by toPng
+    const bodyTop = 150 * s;
+    const strapW = 300 * s;
+    const strapX = (img.width - strapW) / 2;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return dataUrl;
+
+    if (backgroundColor) {
+      // Paint only where artwork actually is, leaving the flanks transparent.
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(strapX, 0, strapW, bodyTop);
+      ctx.fillRect(0, bodyTop, img.width, img.height - bodyTop);
+    }
+
+    ctx.drawImage(img, strapX, 0, strapW, bodyTop, strapX, 0, strapW, bodyTop);
+    ctx.drawImage(
+      img,
+      0,
+      bodyTop,
+      img.width,
+      img.height - bodyTop,
+      0,
+      bodyTop,
+      img.width,
+      img.height - bodyTop,
+    );
+
+    return canvas.toDataURL("image/png");
+  }
+
+  async function renderPng(backgroundColor?: string) {
+    if (!cardRef.current) throw new Error("Card not ready");
+    await document.fonts.ready;
+    const fontEmbedCSS = await getFontEmbedCss();
+    const raw = await toPng(cardRef.current, {
+      pixelRatio: 2,
+      width: CARD_W,
+      height: CARD_H,
+      cacheBust: true,
+      fontEmbedCSS,
+    });
+    return cropToStrap(raw, backgroundColor);
+  }
+
+  async function handleDownload() {
+    setBusy("png");
+    try {
+      const a = document.createElement("a");
+      a.href = await renderPng();
+      a.download = fileName();
+      a.click();
+      toast.success("Card downloaded");
+    } catch {
+      toast.error("Export failed — try again");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  // There is no database: the badge is flattened to a PNG, uploaded, and the
+  // resulting CDN URL *is* the share link. Editing and re-sharing mints a new
+  // URL rather than updating the old one.
+  async function handleShare() {
+    setBusy("share");
+    try {
+      const blob = await (await fetch(await renderPng(card.theme.paper))).blob();
+
+      const form = new FormData();
+      form.append("file", new File([blob], fileName(), { type: "image/png" }));
+      form.append("name", card.name);
+
+      const res = await fetch("/api/upload-card", { method: "POST", body: form });
+      if (!res.ok) throw new Error((await res.text()) || "Upload failed");
+      const { url } = (await res.json()) as { url: string };
+
+      setShareLink(url);
+      await navigator.clipboard?.writeText(url).catch(() => {});
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not share the card");
+    } finally {
+      setBusy(null);
+    }
+  }
 
   return (
     <div style={{ background: CREAM }}>
@@ -311,6 +547,58 @@ function LandingPage() {
                     {i + 1}
                   </span>
                   <s.icon className="size-4" style={{ color: SUN }} />
+        </DialogContent>
+      </Dialog>
+
+      <main className="mx-auto grid max-w-[1500px] gap-6 p-5 lg:grid-cols-[420px_1fr]">
+        {/* editor */}
+        <section className="order-2 lg:order-1">
+          <Tabs defaultValue="you">
+            <TabsList className="grid w-full grid-cols-4">
+              <TabsTrigger value="you">You</TabsTrigger>
+              <TabsTrigger value="photo">Photo</TabsTrigger>
+              <TabsTrigger value="event">Event</TabsTrigger>
+              <TabsTrigger value="style">Style</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="you" className="space-y-4 pt-4">
+              <Field label="Name" value={card.name} onChange={(v) => set("name", v)} />
+              <Field label="Role badge" value={card.role} onChange={(v) => set("role", v)} />
+              <Field label="ID number (auto)" value={card.idNumber} locked />
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Stack (comma separated)
+                </Label>
+                <Textarea
+                  rows={4}
+                  className="bg-card font-mono text-xs"
+                  value={card.stack.join(", ")}
+                  onChange={(e) =>
+                    set(
+                      "stack",
+                      e.target.value
+                        .split(",")
+                        .map((s) => s.trim().toUpperCase())
+                        .filter(Boolean)
+                        .slice(0, 24),
+                    )
+                  }
+                />
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {card.stack.map((s, i) => (
+                    <button
+                      key={`${s}-${i}`}
+                      onClick={() =>
+                        set(
+                          "stack",
+                          card.stack.filter((_, j) => j !== i),
+                        )
+                      }
+                      className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-2.5 py-1 font-mono text-[10px] uppercase tracking-wider hover:border-destructive hover:text-destructive"
+                    >
+                      {s} <X className="size-3" />
+                    </button>
+                  ))}
                 </div>
                 <h3
                   className="mt-5 text-2xl font-black leading-none tracking-tight"
@@ -380,6 +668,110 @@ function LandingPage() {
                 style={{ background: buildTheme(base, accent).paper, border: `1px solid ${GREEN}22` }}
               >
                 <CardPreview card={{ ...card, theme: buildTheme(base, accent) }} scale={0.16} />
+            </TabsContent>
+
+            <TabsContent value="photo" className="space-y-4 pt-4">
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-card px-4 py-8 text-center text-sm text-muted-foreground hover:border-primary">
+                <Upload className="size-5" />
+                Upload a portrait
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) void handleUpload(f);
+                  }}
+                />
+              </label>
+
+              <div className="space-y-2 rounded-lg border border-border bg-card p-4">
+                <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Or generate one with AI
+                </Label>
+                <Textarea
+                  rows={3}
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="Describe the person: hair, outfit, mood…"
+                />
+                <Button className="w-full" disabled={busy === "ai"} onClick={handleGenerate}>
+                  {busy === "ai" ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="size-4" />
+                  )}
+                  Generate golden-hour portrait
+                </Button>
+                {aiPreview ? (
+                  <img
+                    src={aiPreview.url}
+                    alt="Generated portrait preview"
+                    className={`mt-2 w-full rounded-md transition-[filter] duration-500 ${
+                      aiPreview.final ? "blur-0" : "blur-2xl"
+                    }`}
+                  />
+                ) : null}
+              </div>
+
+              {card.portrait ? (
+                <Button variant="outline" className="w-full" onClick={() => set("portrait", null)}>
+                  <X className="size-4" /> Remove portrait
+                </Button>
+              ) : null}
+            </TabsContent>
+
+            <TabsContent value="event" className="space-y-4 pt-4">
+              <p className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
+                <Lock className="size-3.5 shrink-0" />
+                Event details are fixed for Hacker House Goa and can't be edited.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Title line 1" value={card.titleLine1} locked />
+                <Field label="Title line 2" value={card.titleLine2} locked />
+              </div>
+              <Field label="Sticker text" value={card.stickerText} locked />
+              <Field label="Tagline" value={card.tagline} locked />
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Time" value={card.time} locked />
+                <Field label="Room" value={card.room} locked />
+              </div>
+              <Field label="Location" value={card.location} locked />
+              <Field label="Dates" value={card.dates} locked />
+              <Field label="Hype label" value={card.hypeLabel} locked />
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Stamp top" value={card.stampTop} locked />
+                <Field label="Stamp bottom" value={card.stampBottom} locked />
+              </div>
+              <Field label="Footer line 1" value={card.footerLine1} locked />
+              <Field label="Footer line 2" value={card.footerLine2} locked />
+              <Field label="Hashtag" value={card.hashtag} locked />
+            </TabsContent>
+
+
+            <TabsContent value="style" className="space-y-4 pt-4">
+              <div className="space-y-1.5">
+                <Label className="text-[11px] uppercase tracking-[0.18em] text-muted-foreground">
+                  Accent
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(Object.keys(ACCENTS) as (keyof typeof ACCENTS)[]).map((a) => (
+                    <button
+                      key={a}
+                      onClick={() => set("theme", buildTheme(detectBase(card.theme), a))}
+                      className={`flex items-center gap-2 rounded-lg border p-2 font-mono text-[10px] uppercase tracking-wider transition ${
+                        detectAccent(card.theme) === a ? "border-primary" : "border-border"
+                      }`}
+                    >
+                      <span
+                        className="size-4 shrink-0 rounded-full border border-border"
+                        style={{ background: ACCENTS[a] }}
+                      />
+                      {ACCENT_LABELS[a]}
+                    </button>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
