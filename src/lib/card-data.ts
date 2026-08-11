@@ -4,7 +4,34 @@ export type CardTheme = {
   gold: string;
   pink: string;
   ink: string;
+  /**
+   * Which typeface pairing the badge renders in. Omitted on every theme that
+   * predates the field, so `undefined` has to keep meaning "the original
+   * Playfair/Space Mono badge" — saved cards in localStorage carry no `font`.
+   */
+  font?: CardFont;
 };
+
+/**
+ * `hhgoa` is the pairing hhgoa.com itself uses: Imbue, a very tall condensed
+ * display serif, over Victor Mono for the small caps and labels.
+ */
+export type CardFont = "classic" | "hhgoa";
+
+export const FONT_STACKS: Record<CardFont, { display: string; mono: string }> = {
+  classic: {
+    display: "'Playfair Display', serif",
+    mono: "'Space Mono', monospace",
+  },
+  hhgoa: {
+    display: "'Imbue', 'Playfair Display', serif",
+    mono: "'Victor Mono', 'Space Mono', monospace",
+  },
+};
+
+export function fontsOf(theme: CardTheme) {
+  return FONT_STACKS[theme.font ?? "classic"];
+}
 
 /**
  * How the portrait sits inside the badge's frame. `zoom` is relative to the
@@ -67,8 +94,8 @@ export const defaultTheme: CardTheme = {
   ink: "#173328",
 };
 
-export type CardBase = "warm" | "green" | "midnight" | "clay" | "noir" | "ocean";
-export type CardAccent = "pink" | "blue" | "amber" | "teal" | "violet" | "coral";
+export type CardBase = "warm" | "green" | "midnight" | "clay" | "noir" | "ocean" | "hhgoa";
+export type CardAccent = "pink" | "blue" | "amber" | "teal" | "violet" | "coral" | "sun";
 
 export const ACCENTS: Record<CardAccent, string> = {
   pink: "#e0466e",
@@ -77,6 +104,7 @@ export const ACCENTS: Record<CardAccent, string> = {
   teal: "#12a594",
   violet: "#7c5cd6",
   coral: "#f2603c",
+  sun: "#fee101",
 };
 
 export const ACCENT_LABELS: Record<CardAccent, string> = {
@@ -86,6 +114,7 @@ export const ACCENT_LABELS: Record<CardAccent, string> = {
   teal: "Teal",
   violet: "Violet",
   coral: "Coral",
+  sun: "HH Sun",
 };
 
 export const BASES: Record<CardBase, Omit<CardTheme, "pink">> = {
@@ -95,6 +124,8 @@ export const BASES: Record<CardBase, Omit<CardTheme, "pink">> = {
   clay: { paper: "#f4e6dc", emerald: "#6b3a2a", gold: "#b3702f", ink: "#4a2a20" },
   noir: { paper: "#111111", emerald: "#f0e6cf", gold: "#c9a84c", ink: "#f0e6cf" },
   ocean: { paper: "#eaf3f7", emerald: "#0c2340", gold: "#2d8a9e", ink: "#0c2340" },
+  // Straight off hhgoa.com: their cream page, forest green ink and sun yellow.
+  hhgoa: { paper: "#fffbe8", emerald: "#0b6839", gold: "#edd723", ink: "#0b6839", font: "hhgoa" },
 };
 
 export const BASE_LABELS: Record<CardBase, string> = {
@@ -104,6 +135,7 @@ export const BASE_LABELS: Record<CardBase, string> = {
   clay: "Terracotta",
   noir: "Noir gold",
   ocean: "Ocean",
+  hhgoa: "HH Goa",
 };
 
 export function buildTheme(base: CardBase, accent: CardAccent): CardTheme {
@@ -123,6 +155,10 @@ export function detectAccent(theme: CardTheme): CardAccent {
 }
 
 export const themePresets: { name: string; theme: CardTheme }[] = [
+  { name: "HH Goa · Official", theme: buildTheme("hhgoa", "sun") },
+  { name: "HH Goa · Pink", theme: buildTheme("hhgoa", "pink") },
+  { name: "Dark Green · Sun", theme: buildTheme("green", "sun") },
+  { name: "Noir · Sun", theme: buildTheme("noir", "sun") },
   { name: "Warm Ivory · Pink", theme: buildTheme("warm", "pink") },
   { name: "Warm Ivory · Blue", theme: buildTheme("warm", "blue") },
   { name: "Dark Green · Pink", theme: buildTheme("green", "pink") },

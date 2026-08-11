@@ -23,6 +23,9 @@
   --font-mono: "Space Mono", ui-monospace, monospace;
   --font-script: "Parisienne", cursive;
   --font-deva: "Noto Sans Devanagari", sans-serif;
+  /* hhgoa.com's own pairing — used by the HH Goa card theme and /themes. */
+  --font-imbue: "Imbue", "Playfair Display", serif;
+  --font-victor: "Victor Mono", "Space Mono", ui-monospace, monospace;
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);

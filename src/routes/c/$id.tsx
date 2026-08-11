@@ -75,7 +75,7 @@ function SharedCardPage() {
             </a>
           </Button>
           <Button asChild variant="secondary" className="flex-1">
-            <Link to="/">
+            <Link to="/studio">
               <Sparkles className="size-4" /> Make your own
             </Link>
           </Button>

@@ -1,5 +1,5 @@
 const FONT_CSS_URL =
-  "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Space+Mono:wght@400;700&family=Parisienne&family=Noto+Sans+Devanagari:wght@600;700&display=swap";
+  "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Space+Mono:wght@400;700&family=Parisienne&family=Noto+Sans+Devanagari:wght@600;700&family=Imbue:opsz,wght@10..100,400;10..100,700;10..100,900&family=Victor+Mono:wght@400;700&display=swap";
 
 let cached: Promise<string> | null = null;
 

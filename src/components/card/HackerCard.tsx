@@ -1,6 +1,6 @@
 import { useEffect, useState, forwardRef } from "react";
 import QRCode from "qrcode";
-import type { CardData } from "@/lib/card-data";
+import { fontsOf, type CardData } from "@/lib/card-data";
 import beachVillage from "@/assets/beach-village.jpg";
 import palmShadow from "@/assets/palm-shadow.png";
 
@@ -26,7 +26,17 @@ function useQr(value: string, color: string) {
   return url;
 }
 
-function Stamp({ top, bottom, gold, pink }: { top: string; bottom: string; gold: string; pink: string }) {
+function Stamp({
+  top,
+  bottom,
+  pink,
+  mono,
+}: {
+  top: string;
+  bottom: string;
+  pink: string;
+  mono: string;
+}) {
   return (
     <div
       style={{
@@ -55,7 +65,7 @@ function Stamp({ top, bottom, gold, pink }: { top: string; bottom: string; gold:
         </defs>
         <text
           fill={pink}
-          style={{ fontFamily: "'Space Mono', monospace", fontSize: 15, letterSpacing: 3 }}
+          style={{ fontFamily: mono, fontSize: 15, letterSpacing: 3 }}
         >
           <textPath href="#stamp-top" startOffset="50%" textAnchor="middle">
             {top}
@@ -63,7 +73,7 @@ function Stamp({ top, bottom, gold, pink }: { top: string; bottom: string; gold:
         </text>
         <text
           fill={pink}
-          style={{ fontFamily: "'Space Mono', monospace", fontSize: 15, letterSpacing: 4 }}
+          style={{ fontFamily: mono, fontSize: 15, letterSpacing: 4 }}
         >
           <textPath href="#stamp-bottom" startOffset="50%" textAnchor="middle">
             {bottom}
@@ -106,8 +116,16 @@ export const HackerCard = forwardRef<HTMLDivElement, Props>(function HackerCard(
   const stackRows: string[][] = [];
   for (let i = 0; i < data.stack.length; i += 3) stackRows.push(data.stack.slice(i, i + 3));
 
+  const { display, mono } = fontsOf(t);
+  // Imbue is a condensed display face: at a shared size it sets far narrower
+  // and shorter than Playfair, so the big title needs its own scale to keep
+  // filling the badge's width.
+  const isImbue = (t.font ?? "classic") === "hhgoa";
+  const titleSize = isImbue ? 168 : 132;
+  const titleLineHeight = isImbue ? 0.78 : 0.92;
+
   const label: React.CSSProperties = {
-    fontFamily: "'Space Mono', monospace",
+    fontFamily: mono,
     letterSpacing: 2,
     fontSize: 19,
   };
@@ -143,9 +161,9 @@ export const HackerCard = forwardRef<HTMLDivElement, Props>(function HackerCard(
       >
         <div
           style={{
-            fontFamily: "'Playfair Display', serif",
+            fontFamily: display,
             fontWeight: 900,
-            fontSize: 44,
+            fontSize: isImbue ? 54 : 44,
             color: t.pink,
             lineHeight: 1,
           }}
@@ -284,7 +302,7 @@ export const HackerCard = forwardRef<HTMLDivElement, Props>(function HackerCard(
 
           {/* stamp */}
           <div style={{ position: "absolute", top: 210, right: 48, zIndex: 4 }}>
-            <Stamp top={data.stampTop} bottom={data.stampBottom} gold={t.gold} pink={t.pink} />
+            <Stamp top={data.stampTop} bottom={data.stampBottom} pink={t.pink} mono={mono} />
           </div>
 
           {/* title */}
@@ -293,10 +311,10 @@ export const HackerCard = forwardRef<HTMLDivElement, Props>(function HackerCard(
             <div style={{ position: "relative", display: "inline-block" }}>
               <div
                 style={{
-                  fontFamily: "'Playfair Display', serif",
+                  fontFamily: display,
                   fontWeight: 900,
-                  fontSize: 132,
-                  lineHeight: 0.92,
+                  fontSize: titleSize,
+                  lineHeight: titleLineHeight,
                   letterSpacing: -1,
                   color: t.emerald,
                 }}
@@ -305,10 +323,10 @@ export const HackerCard = forwardRef<HTMLDivElement, Props>(function HackerCard(
               </div>
               <div
                 style={{
-                  fontFamily: "'Playfair Display', serif",
+                  fontFamily: display,
                   fontWeight: 900,
-                  fontSize: 132,
-                  lineHeight: 0.94,
+                  fontSize: titleSize,
+                  lineHeight: isImbue ? 0.8 : 0.94,
                   letterSpacing: -1,
                   color: t.emerald,
                 }}
@@ -522,9 +540,9 @@ export const HackerCard = forwardRef<HTMLDivElement, Props>(function HackerCard(
                   background: t.paper,
                   display: "grid",
                   placeItems: "center",
-                  fontFamily: "'Playfair Display', serif",
+                  fontFamily: display,
                   fontWeight: 900,
-                  fontSize: 17,
+                  fontSize: isImbue ? 20 : 17,
                   color: t.pink,
                 }}
               >
